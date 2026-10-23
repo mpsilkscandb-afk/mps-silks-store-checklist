@@ -1,0 +1,16 @@
+{
+  "name": "mps-silks-store-checklist",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MPS Silks Store Operations Checklist — static frontend (GitHub Pages) + Google Apps Script backend",
+  "scripts": {
+    "test": "node --test",
+    "lint": "node scripts/check-syntax.js",
+    "build": "node scripts/build.js",
+    "serve": "npx --yes http-server dist -p 4173 -c-1 || python -m http.server 4173 --directory dist"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "license": "UNLICENSED"
+}

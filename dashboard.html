@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Dashboard — MPS Silks Checklist</title>
+<meta name="theme-color" content="#7A1420"/>
+<link rel="icon" type="image/png" href="images/mps-logo.png"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="css/theme.css"/>
+<style>
+  .body { padding: 14px; max-width: 960px; margin: 0 auto; padding-bottom: 60px; }
+  .date-bar {
+    background: var(--paper); border-bottom: 1.5px solid var(--border);
+    padding: 10px 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .date-inp { padding: 8px 10px; border-radius: var(--r-sm); border: 1.5px solid var(--border-strong); font-size: 13px; background: var(--cream); }
+  .quick-btns { display: flex; gap: 5px; margin-left: auto; flex-wrap: wrap; }
+  .qb {
+    padding: 6px 13px; border-radius: 20px; font-size: 11.5px; font-weight: 700;
+    background: var(--ink-10); color: var(--ink-60); border: 1.5px solid transparent;
+  }
+  .qb.on { background: var(--maroon-l); color: var(--maroon); border-color: var(--maroon); }
+
+  .impact {
+    border-radius: var(--r); padding: 16px 18px; margin-bottom: 14px;
+    display: flex; align-items: flex-start; gap: 14px;
+    background: var(--paper); border: 1.5px solid var(--border); box-shadow: var(--shadow);
+  }
+  .impact .ring {
+    width: 62px; height: 62px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-head); font-size: 20px; font-weight: 700;
+    border: 4px solid var(--maroon); color: var(--maroon); background: var(--cream);
+  }
+  .impact.g .ring { border-color: var(--green); color: var(--green); background: var(--green-l); }
+  .impact.a .ring { border-color: var(--amber); color: var(--amber); background: var(--amber-l); }
+  .impact.r .ring { border-color: var(--red); color: var(--red); background: var(--red-l); }
+  .impact-title { font-family: var(--font-head); font-size: 19px; line-height: 1.2; margin-bottom: 5px; }
+  .impact-sub { font-size: 12.5px; color: var(--ink-60); line-height: 1.65; }
+  .impact-label { font-size: 10px; color: var(--gold-dark); letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
+
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 14px 0 4px; }
+  .toolbar .spacer { flex: 1; }
+
+  .fail-card { background: var(--paper); border: 1.5px solid rgba(179, 38, 30, .3); border-radius: var(--r); padding: 12px; margin-bottom: 8px; box-shadow: var(--shadow); }
+  .fail-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 5px; }
+  .fail-task { font-size: 13.5px; font-weight: 700; flex: 1; line-height: 1.4; }
+  .fail-who { font-size: 11.5px; color: var(--ink-60); margin-bottom: 4px; }
+  .fail-remark { font-size: 12.5px; color: var(--red); background: var(--red-l); padding: 7px 10px; border-radius: 6px; line-height: 1.45; }
+  .thumb-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .thumb {
+    width: 74px; height: 74px; border-radius: var(--r-sm); border: 2px solid var(--border-strong);
+    object-fit: cover; cursor: pointer; background: var(--ivory);
+    display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ink-60);
+  }
+  img.thumb { padding: 0; }
+
+  .trend-card { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+  .bars { display: flex; align-items: flex-end; gap: 4px; height: 96px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; min-width: 0; }
+  .bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+  .bar { width: 100%; max-width: 34px; border-radius: 3px 3px 0 0; min-height: 3px; }
+  .bar.g { background: var(--green); } .bar.a { background: var(--gold); }
+  .bar.r { background: var(--red); } .bar.n { background: var(--border-strong); }
+  .bar-day { font-size: 9px; font-weight: 700; color: var(--ink-60); text-align: center; white-space: nowrap; }
+  .bar-pct { font-size: 9px; color: var(--ink-60); text-align: center; }
+
+  .filter-sel { padding: 8px 10px; border-radius: var(--r-sm); border: 1.5px solid var(--border-strong); font-size: 12.5px; background: var(--paper); }
+
+  @media (max-width: 640px) {
+    .quick-btns { margin-left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="tb-left">
+    <div class="tb-logo-chip"><img src="images/mps-logo.png" alt="MPS Silks"/></div>
+    <div style="min-width:0">
+      <div class="tb-title">MPS Silks — Dashboard</div>
+      <div class="tb-sub" id="tbSub">—</div>
+    </div>
+  </div>
+  <div class="tb-right">
+    <button class="tb-btn" onclick="location.href='checklist.html'">Checklist</button>
+    <button class="tb-btn gold" onclick="location.href='admin.html'">Admin</button>
+    <button class="tb-btn" id="btnLogout">Logout</button>
+  </div>
+</div>
+
+<div class="date-bar">
+  <input class="date-inp" type="date" id="dateFrom"/>
+  <span style="font-size:12px;color:var(--ink-60)">to</span>
+  <input class="date-inp" type="date" id="dateTo"/>
+  <button class="btn sm" onclick="loadDashboard()">Go</button>
+  <div class="quick-btns">
+    <button class="qb on" id="qb-today" onclick="quickDate('today')">Today</button>
+    <button class="qb" id="qb-yday" onclick="quickDate('yday')">Yesterday</button>
+    <button class="qb" id="qb-7" onclick="quickDate('7')">7 Days</button>
+    <button class="qb" id="qb-30" onclick="quickDate('30')">30 Days</button>
+  </div>
+</div>
+
+<div class="body">
+  <div id="loadState" class="loading-block"><div class="spinner"></div><div class="lbl">Loading dashboard...</div></div>
+  <div id="errorState" style="display:none" class="error-box"><span id="errMsg"></span><button class="btn sm ghost" onclick="loadDashboard()">Retry</button></div>
+  <div id="content" style="display:none">
+    <div id="mapWarn"></div>
+    <div id="impactWrap"></div>
+    <div class="stat-row" id="statRow" style="margin-bottom:14px"></div>
+
+    <div class="toolbar">
+      <div class="section-title" style="margin:0;flex:1">Reports &amp; Details</div>
+      <button class="btn sm gold no-print" onclick="exportXlsx()">&#128202; Excel (.xlsx)</button>
+      <button class="btn sm ghost no-print" onclick="exportCsv()">&#128203; CSV</button>
+    </div>
+
+    <div id="failWrap"></div>
+    <div id="outWrap"></div>
+
+    <div class="section-title">Task details
+      <select class="filter-sel" id="statusFilter" onchange="renderDetail()" style="font-size:12px;padding:6px 8px">
+        <option value="">All tasks</option>
+        <option value="PENDING">Pending only</option>
+        <option value="FAIL">Failed only</option>
+        <option value="PASS">Passed only</option>
+        <option value="UPDATED">Updated only</option>
+      </select>
+    </div>
+    <div id="detailWrap"></div>
+
+    <div id="secWrap"></div>
+    <div id="staffWrap"></div>
+    <div id="trendWrap"></div>
+    <div id="updatesWrap"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="photoModal" onclick="closePhotoModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3>Photo evidence</h3>
+    <div id="photoModalBody" style="text-align:center"><div class="spinner" style="margin:20px auto"></div></div>
+    <div class="modal-btns"><button class="btn ghost" onclick="closePhotoModal()">Close</button></div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api.js"></script>
+<script src="js/dates.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/xlsx.js"></script>
+<script>
+(function () {
+'use strict';
+
+var me = window.Auth.require({ admin: true });
+if (!me) return;
+window.UI.bindLogout('btnLogout');
+
+var D = null;      // last dashboard payload
+var range = null;  // {from,to}
+
+// ── date controls ─────────────────────────────────────────────
+function setDates(f, t) {
+  document.getElementById('dateFrom').value = f;
+  document.getElementById('dateTo').value = t;
+}
+window.quickDate = function (key) {
+  var today = window.Dates.today();
+  document.querySelectorAll('.qb').forEach(function (b) { b.classList.remove('on'); });
+  if (key === 'today') { setDates(today, today); document.getElementById('qb-today').classList.add('on'); }
+  else if (key === 'yday') { var y = window.Dates.addDays(today, -1); setDates(y, y); document.getElementById('qb-yday').classList.add('on'); }
+  else if (key === '7') { setDates(window.Dates.addDays(today, -6), today); document.getElementById('qb-7').classList.add('on'); }
+  else if (key === '30') { setDates(window.Dates.addDays(today, -29), today); document.getElementById('qb-30').classList.add('on'); }
+  loadDashboard();
+};
+
+// ── load ──────────────────────────────────────────────────────
+window.loadDashboard = loadDashboard;
+function loadDashboard() {
+  var from = document.getElementById('dateFrom').value;
+  var to = document.getElementById('dateTo').value;
+  if (!window.Dates.isValid(from) || !window.Dates.isValid(to)) {
+    window.UI.toast('Choose a valid date range.', 'err');
+    return;
+  }
+  if (from > to) { var t = from; from = to; to = t; setDates(from, to); }
+  document.getElementById('loadState').style.display = 'flex';
+  document.getElementById('errorState').style.display = 'none';
+  document.getElementById('content').style.display = 'none';
+
+  window.MPS_API.get('getDashboard', { dateFrom: from, dateTo: to }).then(function (r) {
+    document.getElementById('loadState').style.display = 'none';
+    if (!r.ok || !r.dashboard) {
+      document.getElementById('errMsg').textContent = r.error || 'Failed to load the dashboard.';
+      document.getElementById('errorState').style.display = 'flex';
+      return;
+    }
+    D = r.dashboard;
+    range = { from: D.dateFrom, to: D.dateTo };
+    document.getElementById('content').style.display = '';
+    render();
+  });
+}
+
+function focusLabel() {
+  var today = window.Dates.today();
+  if (D.dateFrom === D.dateTo) {
+    if (D.dateTo === today) return 'Today';
+    if (D.dateTo === window.Dates.addDays(today, -1)) return 'Yesterday';
+    return window.Dates.formatShort(D.dateTo);
+  }
+  return window.Dates.formatShort(D.dateFrom) + ' — ' + window.Dates.formatShort(D.dateTo);
+}
+
+function render() {
+  var h = D.headline;
+  var label = focusLabel();
+  document.getElementById('tbSub').textContent =
+    (D.dateFrom === D.dateTo ? window.Dates.formatFull(D.dateFrom) : window.Dates.formatFull(D.dateFrom) + ' — ' + window.Dates.formatFull(D.dateTo));
+
+  // mapping problems (never silently discarded)
+  var mw = document.getElementById('mapWarn');
+  if (D.mappingProblems && D.mappingProblems.length) {
+    mw.innerHTML = '<div class="error-box" style="background:var(--amber-l);border-color:var(--amber);color:var(--amber);margin-bottom:12px">'
+      + '<span>&#9888; Checklist sheet has ' + D.mappingProblems.length + ' mapping issue(s) — see Admin → Tasks for details.</span></div>';
+  } else mw.innerHTML = '';
+
+  // impact banner
+  var cls = h.pct >= 80 ? 'g' : h.pct >= 50 ? 'a' : 'r';
+  var title;
+  if (h.assigned === 0) title = 'No active tasks are configured';
+  else if (h.submitted === 0) title = label + ' — nothing submitted yet';
+  else if (h.pct >= 100) title = label + ' — every task submitted';
+  else if (h.pct >= 80) title = label + ' — almost there, ' + h.pct + '% submitted';
+  else if (h.pct >= 50) title = label + ' — partially done, ' + h.pct + '% submitted';
+  else title = label + ' needs attention — only ' + h.pct + '% submitted';
+
+  var lines = [];
+  lines.push('<strong>' + h.passed + '</strong> passed of <strong>' + h.assigned + '</strong> assigned tasks');
+  if (h.failed > 0) lines.push('<strong>' + h.failed + '</strong> failed and need attention');
+  if (h.pending > 0) lines.push('<strong>' + h.pending + '</strong> ' + (D.outstandingLabel || 'pending').toLowerCase() + ' (not submitted)');
+  if (D.dateFrom !== D.dateTo && D.range) {
+    lines.push('Range average: <strong>' + D.range.pct + '%</strong> submitted over ' + D.range.days + ' day(s)');
+  }
+  document.getElementById('impactWrap').innerHTML =
+    '<div class="impact ' + cls + '">'
+    + '<div class="ring">' + h.pct + '%</div>'
+    + '<div><div class="impact-label">Completion · ' + (D.dateFrom === D.dateTo ? window.Dates.formatFull(D.dateTo) : 'selected range') + '</div>'
+    + '<div class="impact-title">' + window.UI.esc(title) + '</div>'
+    + '<div class="impact-sub">' + lines.join('<br/>') + '</div></div></div>';
+
+  document.getElementById('statRow').innerHTML =
+    stat(h.assigned, 'Assigned', '')
+    + stat(h.submitted, 'Submitted', 'gold')
+    + stat(h.passed, 'Passed', 'green')
+    + stat(h.failed, 'Failed', 'red')
+    + stat(h.pending, D.outstandingLabel || 'Pending', 'amber');
+
+  renderFailed();
+  renderOutstanding();
+  renderDetail();
+  renderSections();
+  renderStaff();
+  renderTrend();
+  renderUpdates();
+}
+
+function stat(n, l, cls) {
+  return '<div class="stat-card ' + cls + '"><div class="stat-n">' + n + '</div><div class="stat-l">' + l + '</div></div>';
+}
+
+// ── failed ────────────────────────────────────────────────────
+function renderFailed() {
+  var el = document.getElementById('failWrap');
+  if (!D.failed || !D.failed.length) { el.innerHTML = ''; return; }
+  var html = '<div class="section-title">Failed — needs attention <span class="badge red">' + D.failed.length + '</span></div>';
+  D.failed.forEach(function (t) {
+    html += '<div class="fail-card">'
+      + '<div class="fail-top"><div class="fail-task">' + window.UI.esc(t.taskName) + '</div>'
+      + '<span class="badge maroon">' + window.UI.esc(t.section) + '</span></div>'
+      + (t.staffName ? '<div class="fail-who">' + window.UI.esc(t.staffName) + (t.timestamp ? ' · ' + window.UI.esc(String(t.timestamp).slice(11, 16)) : '') + '</div>' : '')
+      + (t.remarks ? '<div class="fail-remark">&#128172; ' + window.UI.esc(t.remarks) + '</div>' : '')
+      + photoThumbs(t)
+      + '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function photoThumbs(t) {
+  if (!t.photoRef) return '';
+  var ids = String(t.photoRef).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  if (!ids.length) return '';
+  var html = '<div class="thumb-row">';
+  ids.forEach(function (id, i) {
+    var label = ids.length > 1 ? 'Photo ' + (i + 1) : 'View photo';
+    html += '<div class="thumb" data-file="' + window.UI.esc(id) + '" onclick="openPhoto(this.getAttribute(\'data-file\'))">' + label + '</div>';
+  });
+  return html + '</div>';
+}
+// How many photos a row carries (photoRef is a ","-list; photoCount is the
+// backend's own count when it sends one).
+function photoCountOf(t) {
+  if (typeof t.photoCount === 'number') return t.photoCount;
+  return String(t.photoRef || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean).length;
+}
+
+// ── outstanding ───────────────────────────────────────────────
+function renderOutstanding() {
+  var el = document.getElementById('outWrap');
+  if (!D.outstanding || !D.outstanding.length) { el.innerHTML = ''; return; }
+  var label = D.outstandingLabel || 'Pending';
+  var html = '<div class="section-title">' + (label === 'Missed' ? 'Missed' : 'Not submitted') + ' <span class="badge amber">' + D.outstanding.length + '</span></div>'
+    + '<p style="font-size:11.5px;color:var(--ink-60);margin:-4px 0 8px">'
+    + (label === 'Missed'
+      ? 'These tasks were expected on a past date but have no submission.'
+      : 'Tasks due today that are still awaiting submission — they are only counted as “missed” after the day ends (the checklist defines no per-task due times).')
+    + '</p>'
+    + '<div class="table-wrap"><table class="data"><thead><tr><th>Task</th><th>Section</th><th>Mandatory</th><th>Photo</th><th>Status</th></tr></thead><tbody>';
+  D.outstanding.forEach(function (t) {
+    html += '<tr><td style="max-width:300px">' + window.UI.esc(t.taskName) + '</td>'
+      + '<td>' + window.UI.esc(t.section) + '</td>'
+      + '<td>' + (t.mandatory ? '<span class="badge maroon">Yes</span>' : '—') + '</td>'
+      + '<td>' + (t.photoRequired ? '<span class="badge gold">Required</span>' : '—') + '</td>'
+      + '<td><span class="badge amber">' + window.UI.esc(t.outstandingLabel || label) + '</span></td></tr>';
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+// ── detail table (filterable, feeds export) ───────────────────
+window.renderDetail = renderDetail;
+function renderDetail() {
+  var el = document.getElementById('detailWrap');
+  if (!D || !D.detail) { el.innerHTML = ''; return; }
+  var f = document.getElementById('statusFilter').value;
+  var rows = D.detail.filter(function (t) {
+    if (!f) return true;
+    if (f === 'UPDATED') return t.updates > 1;
+    return t.status === f;
+  });
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty">No tasks match this filter.</div>';
+    return;
+  }
+  var html = '<div class="table-wrap"><table class="data"><thead><tr>'
+    + '<th>ID</th><th>Section</th><th>Task</th><th>Status</th><th>Response</th><th>Staff</th><th>Time</th><th>Seq</th><th>Remarks</th>'
+    + '</tr></thead><tbody>';
+  rows.forEach(function (t) {
+    var badge = t.status === 'PASS' ? '<span class="badge green">Passed</span>'
+      : t.status === 'FAIL' ? '<span class="badge red">Failed</span>'
+      : '<span class="badge amber">' + window.UI.esc(t.outstandingLabel || 'Pending') + '</span>';
+    html += '<tr><td style="font-family:monospace;font-size:11px">' + window.UI.esc(t.taskId) + '</td>'
+      + '<td style="white-space:nowrap">' + window.UI.esc(t.section) + '</td>'
+      + '<td style="max-width:260px">' + window.UI.esc(t.taskName) + '</td>'
+      + '<td>' + badge + '</td>'
+      + '<td>' + window.UI.esc(t.response || '—') + '</td>'
+      + '<td style="white-space:nowrap">' + window.UI.esc(t.staffName || '—') + '</td>'
+      + '<td style="white-space:nowrap">' + window.UI.esc(t.timestamp ? String(t.timestamp).slice(11, 16) : '—') + '</td>'
+      + '<td>' + (t.updates > 1 ? '<span class="badge amber">Update ×' + t.updates + '</span>' : window.UI.esc(t.sequence || '—')) + '</td>'
+      + '<td style="max-width:200px">' + window.UI.esc(t.remarks || '—') + (t.photoRef ? ' <span class="badge gold">&#128247;' + (photoCountOf(t) > 1 ? ' &times;' + photoCountOf(t) : '') + '</span>' : '') + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+// ── sections ──────────────────────────────────────────────────
+function renderSections() {
+  var el = document.getElementById('secWrap');
+  if (!D.sections || !D.sections.length) { el.innerHTML = ''; return; }
+  var html = '<div class="section-title">Section breakdown</div>'
+    + '<div class="table-wrap"><table class="data"><thead><tr><th>#</th><th>Section</th><th>Submitted</th><th>Passed</th><th>Failed</th><th>' + window.UI.esc(D.outstandingLabel || 'Pending') + '</th><th style="width:180px">Progress</th></tr></thead><tbody>';
+  D.sections.forEach(function (s, i) {
+    var sc = window.UI.scoreClass(s.pct);
+    html += '<tr><td style="color:var(--ink-30);font-size:11px">' + (i + 1) + '</td>'
+      + '<td style="font-weight:700">' + window.UI.esc(s.section) + '</td>'
+      + '<td>' + s.submitted + ' / ' + s.assigned + '</td>'
+      + '<td style="color:var(--green);font-weight:700">' + s.passed + '</td>'
+      + '<td style="color:' + (s.failed ? 'var(--red)' : 'var(--ink-30)') + ';font-weight:' + (s.failed ? '700' : '400') + '">' + s.failed + '</td>'
+      + '<td style="color:' + (s.pending ? 'var(--amber)' : 'var(--ink-30)') + '">' + s.pending + '</td>'
+      + '<td><div class="score-wrap"><div class="score-bar"><div class="score-fill ' + sc + '" style="width:' + s.pct + '%"></div></div>'
+      + '<span class="score-pct">' + s.pct + '%</span></div></td></tr>';
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+// ── staff ─────────────────────────────────────────────────────
+function renderStaff() {
+  var el = document.getElementById('staffWrap');
+  if (!D.staff || D.staff.length < 1) { el.innerHTML = ''; return; }
+  var html = '<div class="section-title">Staff submissions (' + window.UI.esc(D.dateTo === window.Dates.today() ? 'today' : window.Dates.formatShort(D.dateTo)) + ')</div>'
+    + '<div class="table-wrap"><table class="data"><thead><tr><th>Staff</th><th>Submitted</th><th>Passed</th><th>Failed</th></tr></thead><tbody>';
+  D.staff.forEach(function (s) {
+    html += '<tr><td style="font-weight:700">' + window.UI.esc(s.name) + '</td>'
+      + '<td>' + s.submitted + '</td>'
+      + '<td style="color:var(--green);font-weight:700">' + s.passed + '</td>'
+      + '<td style="color:' + (s.failed ? 'var(--red)' : 'var(--ink-30)') + '">' + s.failed + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+// ── trend ─────────────────────────────────────────────────────
+function renderTrend() {
+  var el = document.getElementById('trendWrap');
+  if (!D.trend || D.trend.length < 2) { el.innerHTML = ''; return; }
+  var html = '<div class="trend-card"><div class="section-title" style="margin-top:0">Daily completion trend</div><div class="bars">';
+  D.trend.forEach(function (t) {
+    var cls = t.submitted === 0 ? 'n' : t.pct >= 80 ? 'g' : t.pct >= 50 ? 'a' : 'r';
+    var hpx = Math.max(4, Math.round((t.pct / 100) * 72));
+    html += '<div class="bar-col" title="' + window.UI.esc(window.Dates.formatShort(t.date) + ': ' + t.pct + '% submitted' + (t.failed ? ' (' + t.failed + ' failed)' : '')) + '">'
+      + '<div class="bar-pct">' + (t.submitted ? t.pct + '%' : '—') + '</div>'
+      + '<div class="bar-wrap"><div class="bar ' + cls + '" style="height:' + hpx + 'px"></div></div>'
+      + '<div class="bar-day">' + window.Dates.formatShort(t.date).split(' ')[0] + '<br/><span style="font-weight:400">' + t.date.slice(8) + '</span></div></div>';
+  });
+  html += '</div><div style="display:flex;gap:12px;margin-top:10px;font-size:10.5px;color:var(--ink-60);flex-wrap:wrap">'
+    + '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green)"></span> 80%+</span>'
+    + '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold)"></span> 50–79%</span>'
+    + '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red)"></span> below 50%</span>'
+    + '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--border-strong)"></span> nothing submitted</span>'
+    + '</div></div>';
+  el.innerHTML = html;
+}
+
+// ── updates log ───────────────────────────────────────────────
+function renderUpdates() {
+  var el = document.getElementById('updatesWrap');
+  if (!D.updates || !D.updates.length) { el.innerHTML = ''; return; }
+  var html = '<div class="section-title">Updated after submission <span class="badge amber">' + D.updates.length + '</span></div>';
+  D.updates.forEach(function (u) {
+    html += '<div class="fail-card" style="border-color:rgba(178,107,0,.35)">'
+      + '<div style="font-size:10.5px;color:var(--ink-60);margin-bottom:4px">' + window.UI.esc(u.section) + ' · ' + window.UI.esc(u.taskId) + ' · ' + window.UI.esc(window.Dates.formatShort(u.date)) + '</div>'
+      + '<div class="fail-task" style="margin-bottom:8px">' + window.UI.esc(u.taskName) + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      + '<div style="padding:8px 10px;border-radius:var(--r-sm);background:var(--ivory)">'
+      + '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--red);margin-bottom:3px">First entry</div>'
+      + '<div style="font-size:12px;font-weight:600">' + window.UI.esc(u.firstBy) + '</div>'
+      + '<div style="font-size:11px;color:var(--ink-60)">' + window.UI.esc(u.firstResponse) + (u.firstRemarks ? ' — ' + window.UI.esc(u.firstRemarks) : '') + '</div></div>'
+      + '<div style="padding:8px 10px;border-radius:var(--r-sm);background:var(--ivory)">'
+      + '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--green);margin-bottom:3px">Updated to (latest)</div>'
+      + '<div style="font-size:12px;font-weight:600">' + window.UI.esc(u.latestBy) + '</div>'
+      + '<div style="font-size:11px;color:var(--ink-60)">' + window.UI.esc(u.latestResponse) + (u.latestRemarks ? ' — ' + window.UI.esc(u.latestRemarks) : '') + '</div></div>'
+      + '</div></div>';
+  });
+  el.innerHTML = html;
+}
+
+// ── photo modal ───────────────────────────────────────────────
+window.openPhoto = function (fileId) {
+  var body = document.getElementById('photoModalBody');
+  body.innerHTML = '<div class="spinner" style="margin:20px auto"></div>';
+  document.getElementById('photoModal').classList.add('open');
+  window.MPS_API.photoUrl(fileId).then(function (url) {
+    body.innerHTML = '<img src="' + url + '" alt="Photo evidence"/>';
+  }).catch(function (e) {
+    body.innerHTML = '<div class="error-box">' + window.UI.esc(e.message || 'Photo unavailable.') + '</div>';
+  });
+};
+window.closePhotoModal = function (e) {
+  if (e && e.target && e.target.closest && e.target.closest('.modal') && e.type === 'click') return;
+  document.getElementById('photoModal').classList.remove('open');
+};
+
+// ── exports ───────────────────────────────────────────────────
+function exportFileStem() {
+  return 'mps-silks_checklist_' + (D.dateFrom === D.dateTo ? D.dateTo : D.dateFrom + '_to_' + D.dateTo);
+}
+function exportSheets() {
+  var summary = [
+    ['MPS Silks — Store Operations Checklist Report'],
+    ['Date range', D.dateFrom === D.dateTo ? D.dateTo : D.dateFrom + ' to ' + D.dateTo],
+    ['Generated', window.Dates.now().date + ' ' + window.Dates.now().time + ' IST'],
+    [],
+    ['Metric', 'Value'],
+    ['Assigned tasks (focus date ' + D.focusDate + ')', D.headline.assigned],
+    ['Submitted', D.headline.submitted],
+    ['Passed', D.headline.passed],
+    ['Failed', D.headline.failed],
+    [D.outstandingLabel || 'Pending', D.headline.pending],
+    ['Completion % (submitted ÷ assigned)', D.headline.pct + '%'],
+    ['Pass % (passed ÷ assigned)', D.headline.passPct + '%']
+  ];
+  if (D.range && D.dateFrom !== D.dateTo) {
+    summary.push([], ['Range totals'],
+      ['Days', D.range.days],
+      ['Assigned (sum of daily)', D.range.assignedTotal],
+      ['Submitted (sum of daily)', D.range.submittedTotal],
+      ['Passed (sum of daily)', D.range.passedTotal],
+      ['Failed (sum of daily)', D.range.failedTotal],
+      ['Range completion %', D.range.pct + '%']);
+  }
+  var detail = [['Date', 'Task ID', 'Section', 'Task', 'Type', 'Mandatory', 'Photo Required', 'Assigned To', 'Status', 'Response', 'Staff', 'Submitted At', 'Sequence', 'Updates', 'Remarks', 'Photo Reference']];
+  (D.detail || []).forEach(function (t) {
+    detail.push([t.date, t.taskId, t.section, t.taskName, t.type, t.mandatory ? 'Yes' : 'No', t.photoRequired ? 'Yes' : 'No',
+      t.assignedTo, t.status, t.response, t.staffName, t.timestamp, t.sequence, t.updates, t.remarks, t.photoRef]);
+  });
+  var sec = [['Section', 'Assigned', 'Submitted', 'Passed', 'Failed', D.outstandingLabel || 'Pending', 'Completion %']];
+  (D.sections || []).forEach(function (s) {
+    sec.push([s.section, s.assigned, s.submitted, s.passed, s.failed, s.pending, s.pct + '%']);
+  });
+  var upd = [['Date', 'Task ID', 'Task', 'Section', 'First By', 'First Response', 'First Remarks', 'Latest By', 'Latest Response', 'Latest Remarks', 'Entries']];
+  (D.updates || []).forEach(function (u) {
+    upd.push([u.date, u.taskId, u.taskName, u.section, u.firstBy, u.firstResponse, u.firstRemarks, u.latestBy, u.latestResponse, u.latestRemarks, u.totalEntries]);
+  });
+  return [
+    { name: 'Summary', rows: summary, cols: [34, 22] },
+    { name: 'Task Details', rows: detail, cols: [12, 9, 20, 46, 9, 11, 13, 14, 10, 14, 14, 19, 10, 9, 34, 26] },
+    { name: 'Sections', rows: sec, cols: [24, 10, 11, 9, 9, 10, 13] },
+    { name: 'Updates Log', rows: upd, cols: [12, 9, 40, 18, 14, 16, 26, 14, 16, 26, 9] }
+  ];
+}
+window.exportXlsx = function () {
+  if (!D) return;
+  window.XLSX.downloadXlsx(exportFileStem() + '.xlsx', exportSheets());
+  window.UI.toast('Report downloaded.', 'ok');
+};
+window.exportCsv = function () {
+  if (!D) return;
+  window.XLSX.downloadCsv(exportFileStem() + '.csv', exportSheets()[1].rows);
+  window.UI.toast('CSV downloaded.', 'ok');
+};
+
+// boot
+window.quickDate('today');
+})();
+</script>
+</body>
+</html>

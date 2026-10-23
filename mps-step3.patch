@@ -1,0 +1,420 @@
+diff -u a/admin.html b/admin.html
+--- a/admin.html	2026-10-22 11:27:01.557750217 +0000
++++ b/admin.html	2026-10-22 11:27:23.542679969 +0000
+@@ -245,7 +245,11 @@
+     r.photos.forEach(function (ph) {
+       var card = document.createElement('div');
+       card.className = 'ph-card';
+-      card.innerHTML = '<div class="ph-date">' + window.UI.esc(ph.date) + ' · ' + window.UI.esc(String(ph.timestamp).slice(11, 16)) + '</div>'
++      var taken = ph.photoTime
++        ? '&#128247; Taken ' + window.UI.esc(ph.photoTime.slice(0, 10)) + ' ' + window.UI.esc(ph.photoTime.slice(11, 19))
++        : '&#128247; Taken time not recorded';
++      card.innerHTML = '<div class="ph-date">' + taken + '</div>'
++        + '<div class="ph-meta">Submitted ' + window.UI.esc(ph.date) + ' ' + window.UI.esc(String(ph.timestamp).slice(11, 19)) + '</div>'
+         + '<div class="ph-task">' + window.UI.esc(ph.taskName || ph.taskId) + '</div>'
+         + '<div class="ph-meta">' + window.UI.esc(ph.staffName) + (ph.section ? ' · ' + window.UI.esc(ph.section) : '')
+         + (ph.status ? ' · ' + window.UI.esc(ph.status) : '') + '</div>'
+diff -u a/backend/MPS_BACKEND.gs b/backend/MPS_BACKEND.gs
+--- a/backend/MPS_BACKEND.gs	2026-10-22 11:27:01.558994986 +0000
++++ b/backend/MPS_BACKEND.gs	2026-10-22 11:27:10.495554537 +0000
+@@ -783,6 +783,7 @@
+       row[col.sequence !== undefined ? col.sequence : 12] = todayIds[c.taskId] ? 'Update' : 'First';
+       row[col.updateReason !== undefined ? col.updateReason : 13] = c.updateReason;
+       row[col.submissionId !== undefined ? col.submissionId : 14] = batchId;
++      row[col.photoTime !== undefined ? col.photoTime : 15] = c.photoTime || '';
+       return row;
+     });
+     if (rows.length) {
+@@ -802,7 +803,7 @@
+ }
+ 
+ var SUB_HEADERS_ = ['Timestamp', 'Date', 'Staff_Name', 'Role', 'Section', 'Task_ID', 'Task_Name',
+-  'Type', 'Response', 'Photo_URL', 'Status', 'Remarks', 'Sequence', 'Override_Reason', 'Submission_ID'];
++  'Type', 'Response', 'Photo_URL', 'Status', 'Remarks', 'Sequence', 'Override_Reason', 'Submission_ID', 'Photo_Time'];
+ 
+ function ensureHeaders_(sheetName, wanted) {
+   var sheet = sheet_(sheetName);
+@@ -851,6 +852,7 @@
+   if (!folderId) return { ok: false, error: 'Photo storage is not configured on the server.', code: 'CONFIG' };
+ 
+   var today = todayIst_();
++  var ts = nowIst_();
+   var uuid = Utilities.getUuid();
+   var filename = 'mps_' + today + '_' + sess.name.replace(/[^A-Za-z0-9]/g, '') + '_' + MPSCore.cleanText(p.taskId, 20) + '_' + uuid.slice(0, 8) + PHOTO_MIME_OK_[mime];
+   try {
+@@ -858,7 +860,8 @@
+     var blob = Utilities.newBlob(bytes, mime, filename);
+     var file = folder.createFile(blob);
+     // Keep photos PRIVATE — no public sharing. Access only via getPhoto.
+-    file.setDescription(JSON.stringify({ staff: sess.name, taskId: MPSCore.str(p.taskId), date: today }));
++    file.setDescription(JSON.stringify({ staff: sess.name, taskId: MPSCore.str(p.taskId), date: today,
++      takenAt: MPSCore.cleanPhotoTime(p.photoTime, Date.now()), uploadedAt: ts }));
+     var fileId = file.getId();
+     return { ok: true, photoId: fileId, name: filename };
+   } catch (err) {
+diff -u a/backend/mps-core.gs b/backend/mps-core.gs
+--- a/backend/mps-core.gs	2026-10-22 11:27:01.558434219 +0000
++++ b/backend/mps-core.gs	2026-10-22 11:27:10.494628100 +0000
+@@ -56,6 +56,7 @@
+       type:          ['type', 'tasktype'],
+       response:      ['response', 'answer', 'value', 'result'],
+       photoUrl:      ['photourl', 'photo', 'photoid', 'image', 'imageurl', 'fileid'],
++      photoTime:     ['phototime', 'photoat', 'phototakenat', 'photocapturedat', 'photoclicktime'],
+       remarks:       ['remarks', 'remark', 'comments', 'comment', 'notes', 'note', 'reason'],
+       status:        ['status', 'outcome'],
+       sequence:      ['sequence', 'seq'],
+@@ -376,6 +377,7 @@
+         type: col.type !== undefined ? str(raw[col.type]) : '',
+         response: col.response !== undefined ? str(raw[col.response]) : '',
+         photoRef: col.photoUrl !== undefined ? str(raw[col.photoUrl]) : '',
++        photoTime: col.photoTime !== undefined ? str(raw[col.photoTime]) : '',
+         status: col.status !== undefined ? str(raw[col.status]).toUpperCase() : '',
+         remarks: col.remarks !== undefined ? str(raw[col.remarks]) : '',
+         sequence: col.sequence !== undefined ? str(raw[col.sequence]) : '',
+@@ -407,8 +409,20 @@
+   }
+ 
+   // ── submission validation ────────────────────────────────────
+-  // entries: [{taskId, response, remarks, photoRef, updateReason}]
+-  function validateEntries(entries, taskMap) {
++  // Time a photo was taken, 'YYYY-MM-DD HH:MM:SS' (IST, from the phone). Anything that
++  // is not that format, is in the future (> 5 min) or older than 36 h is dropped ('').
++  function cleanPhotoTime(v, nowMs) {
++    var s = str(v);
++    if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) return '';
++    var t = Date.parse(s.replace(' ', 'T') + '+05:30');
++    if (isNaN(t)) return '';
++    var now = nowMs || Date.now();
++    if (t > now + 5 * 60000 || t < now - 36 * 3600000) return '';
++    return s;
++  }
++
++  // entries: [{taskId, response, remarks, photoRef, photoTime, updateReason}]
++  function validateEntries(entries, taskMap, nowMs) {
+     var errors = [];
+     var clean = [];
+     if (!entries || !entries.length) {
+@@ -464,6 +478,7 @@
+         response: response,
+         remarks: remarks,
+         photoRef: photoRef,
++        photoTime: photoRef ? cleanPhotoTime(e.photoTime, nowMs) : '',
+         status: status,
+         updateReason: updateReason
+       });
+@@ -555,6 +570,7 @@
+         staffName: st.sub ? st.sub.staffName : '',
+         remarks: st.sub ? st.sub.remarks : '',
+         photoRef: st.sub ? st.sub.photoRef : '',
++        photoTime: st.sub ? st.sub.photoTime : '',
+         timestamp: st.sub ? st.sub.timestamp : '',
+         sequence: st.sub ? st.sub.sequence : '',
+         updateReason: st.sub ? st.sub.updateReason : '',
+@@ -709,9 +725,14 @@
+     var max = limit > 0 ? limit : 200;
+     var all = (subs || []).filter(function (s) {
+       return s && s.photoRef && s.date && s.date >= dateFrom && s.date <= dateTo;
+-    }).sort(function (a, b) {
+-      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+-      return String(b.timestamp) < String(a.timestamp) ? -1 : (String(b.timestamp) > String(a.timestamp) ? 1 : 0);
++    });
++    // A later update row can repeat the same photo without its capture time:
++    // remember the first capture time seen for each photo.
++    var takenAt = {};
++    all.forEach(function (s) { if (s.photoTime && !takenAt[s.photoRef]) takenAt[s.photoRef] = s.photoTime; });
++    all.sort(function (a, b) {
++      var ta = String(takenAt[a.photoRef] || a.timestamp), tb = String(takenAt[b.photoRef] || b.timestamp);
++      return tb < ta ? -1 : (tb > ta ? 1 : 0);          // newest photo first
+     });
+     var seen = {};
+     var unique = all.filter(function (s) {          // same photo can appear on several rows
+@@ -723,7 +744,7 @@
+       total: unique.length,
+       truncated: unique.length > max,
+       photos: unique.slice(0, max).map(function (s) {
+-        return { date: s.date, timestamp: s.timestamp, staffName: s.staffName, section: s.section,
++        return { date: s.date, timestamp: s.timestamp, photoTime: takenAt[s.photoRef] || '', staffName: s.staffName, section: s.section,
+                  taskId: s.taskId, taskName: s.taskName, status: s.status, sequence: s.sequence,
+                  remarks: s.remarks, photoRef: s.photoRef };
+       })
+@@ -758,6 +779,7 @@
+     validateEntries: validateEntries,
+     computeDashboard: computeDashboard,
+     listPhotos: listPhotos,
++    cleanPhotoTime: cleanPhotoTime,
+     tasksForUser: tasksForUser,
+     latestForDay: latestForDay,
+     sectionsFor: sectionsFor,
+diff -u a/checklist.html b/checklist.html
+--- a/checklist.html	2026-10-22 11:27:01.559656686 +0000
++++ b/checklist.html	2026-10-22 11:27:23.541674591 +0000
+@@ -221,7 +221,7 @@
+         if (t.submitted && t.submittedStatus) {
+           var ss = t.submittedStatus;
+           ans[t.taskId] = {
+-            v: ss.response, r: ss.remarks, photoId: ss.photoRef || '',
++            v: ss.response, r: ss.remarks, photoId: ss.photoRef || '', photoTime: ss.photoTime || '',
+             _done: true, _who: ss.staffName, _ts: ss.timestamp, _status: ss.status, _seq: ss.sequence
+           };
+         }
+@@ -251,7 +251,8 @@
+         var t0 = findTask(tid);
+         if (!t0 || (ans[tid] && ans[tid]._done)) { dpDelete(tid); return; }
+         var a0 = getAns(tid);
+-        a0.p = saved[tid];
++        a0.p = (typeof saved[tid] === 'string') ? saved[tid] : saved[tid].p;   // older drafts stored plain strings
++        a0.pt = (typeof saved[tid] === 'string') ? '' : (saved[tid].t || '');
+         a0._needPhoto = false;
+         if (t0.type === 'photo') { a0.v = 'Photo'; a0._status = 'OK'; }
+       });
+@@ -342,6 +343,7 @@
+     div.innerHTML = '<div class="done-row"><div class="done-icon">' + (passed ? '&#9989;' : '&#10060;') + '</div>'
+       + '<div class="done-info"><div class="done-name">' + window.UI.esc(t.taskName) + ' ' + mb + ' ' + pb + '</div>'
+       + '<div class="done-meta">' + window.UI.esc(a._who || me.name) + (timeStr ? ' · ' + timeStr : '')
++      + (a.photoTime ? ' · &#128247; ' + window.UI.esc(fmtPhotoTime(a.photoTime)) : '')
+       + (a._seq === 'Update' ? ' · <span class="badge amber">Updated</span>' : '')
+       + (passed ? '' : ' <span class="badge red">Needs attention</span>') + '</div></div></div>'
+       + '<div class="done-expand" data-edit-toggle="' + window.UI.esc(id) + '">&#9998; View / Update &#8964;</div>'
+@@ -495,6 +497,11 @@
+   if (etxt) { getAns(etxt).v = el.value.trim(); markUr(etxt); return; }
+ }
+ 
++// 'YYYY-MM-DD HH:MM:SS' → 'HH:MM' (with the date when it is not today)
++function fmtPhotoTime(pt) {
++  if (!pt) return '';
++  return (String(pt).slice(0, 10) === today ? '' : String(pt).slice(0, 10) + ' ') + String(pt).slice(11, 16);
++}
+ function getAns(id) { if (!ans[id]) ans[id] = {}; return ans[id]; }
+ function findTask(id) {
+   var found = null;
+@@ -552,13 +559,15 @@
+   input.value = '';
+   input.onchange = function () {
+     if (!input.files || !input.files[0]) return;
++    var takenAt = window.Dates.now().date + ' ' + window.Dates.now().time;   // when the photo was taken
+     var btnMsg = 'Processing photo...';
+     window.UI.toast(btnMsg);
+     window.UI.compressImage(input.files[0], CFG.photo).then(function (dataUrl) {
+       var a = getAns(id);
+       a.p = dataUrl;
++      a.pt = takenAt;
+       a._needPhoto = false;
+-      if (!isEdit) dpPut(id, dataUrl);
++      if (!isEdit) dpPut(id, dataUrl, takenAt);
+       a.photoId = isEdit ? a.photoId : '';   // edit keeps the stored id until a new upload succeeds
+       if (!isEdit) {
+         var t = findTask(id);
+@@ -588,6 +597,7 @@
+   var isEdit = /e$/.test(key);
+   var a = getAns(id);
+   delete a.p;
++  delete a.pt;
+   if (!isEdit) dpDelete(id);
+   if (isEdit) { /* keep the previously submitted photoId on the server */ }
+   else { a.photoId = a._origPhotoId || ''; if (a.v === 'Photo') { delete a.v; a._status = ''; } }
+@@ -673,6 +683,7 @@
+         section: s.section, task: t,
+         response: a.v || '', remarks: a.r || '',
+         photoData: (a.p && a.p.indexOf('data:') === 0) ? a.p : '',
++        photoTime: a.p ? (a.pt || '') : '',
+         photoIdExisting: (!a.p && a.photoId) ? a.photoId : ''
+       });
+     });
+@@ -710,7 +721,7 @@
+   if (next === -1) { doneCb(); return; }
+   var e = entries[next];
+   document.getElementById('subBtn').textContent = 'Uploading photo ' + (next + 1) + ' of ' + entries.length + '...';
+-  window.MPS_API.post('uploadPhoto', { photoBase64: e.photoData, taskId: e.task.taskId }).then(function (r) {
++  window.MPS_API.post('uploadPhoto', { photoBase64: e.photoData, taskId: e.task.taskId, photoTime: e.photoTime || '' }).then(function (r) {
+     if (!r.ok) {
+       window.UI.toast('Photo upload failed for "' + e.task.taskName + '": ' + (r.error || 'try again'), 'err');
+       var btn = document.getElementById('subBtn');
+@@ -732,7 +743,8 @@
+         taskId: e.task.taskId,
+         response: e.response,
+         remarks: e.remarks,
+-        photoRef: e.photoRef || e.photoIdExisting || ''
++        photoRef: e.photoRef || e.photoIdExisting || '',
++        photoTime: e.photoRef ? (e.photoTime || '') : ''
+       };
+     })
+   };
+@@ -753,8 +765,9 @@
+       a._seq = (r.saved || []).reduce(function (seq, s) {
+         return s.taskId === e.task.taskId ? s.sequence : seq;
+       }, 'First');
+-      if (e.photoRef) { a.photoId = e.photoRef; a._origPhotoId = e.photoRef; }
++      if (e.photoRef) { a.photoId = e.photoRef; a._origPhotoId = e.photoRef; if (e.photoTime) a.photoTime = e.photoTime; }
+       delete a.p;
++      delete a.pt;
+       dpDelete(e.task.taskId);
+     });
+     pendingBatchId = null;
+@@ -806,10 +819,10 @@
+   btn.disabled = true;
+   btn.textContent = 'Saving...';
+ 
+-  function send(photoRef) {
++  function send(photoRef, takenAt) {
+     window.MPS_API.post('submitChecklist', {
+       batchId: window.UI.uuid(),
+-      entries: [{ taskId: id, response: t.type === 'photo' ? (response || 'Photo') : response, remarks: remarks, photoRef: photoRef || '', updateReason: reason }]
++      entries: [{ taskId: id, response: t.type === 'photo' ? (response || 'Photo') : response, remarks: remarks, photoRef: photoRef || '', photoTime: photoRef ? (takenAt || '') : '', updateReason: reason }]
+     }).then(function (r) {
+       btn.disabled = false;
+       btn.textContent = '✓ Save Update';
+@@ -820,8 +833,9 @@
+       a._status = (t.type === 'yesno' && response === 'no') ? 'FAIL' : (t.type === 'rating' && parseInt(response, 10) < 3 ? 'FAIL' : 'OK');
+       a._seq = 'Update';
+       a.r = remarks;
+-      if (photoRef) { a.photoId = photoRef; a._origPhotoId = photoRef; }
++      if (photoRef) { a.photoId = photoRef; a._origPhotoId = photoRef; if (takenAt) a.photoTime = takenAt; }
+       delete a.p;
++      delete a.pt;
+       window.UI.toast('Entry updated.', 'ok');
+       build();
+       restoreServerPhotos();
+@@ -830,13 +844,13 @@
+ 
+   if (a.p && a.p.indexOf('data:') === 0) {
+     btn.textContent = 'Uploading photo...';
+-    window.MPS_API.post('uploadPhoto', { photoBase64: a.p, taskId: id }).then(function (r) {
++    window.MPS_API.post('uploadPhoto', { photoBase64: a.p, taskId: id, photoTime: a.pt || '' }).then(function (r) {
+       if (!r.ok) {
+         btn.disabled = false; btn.textContent = '✓ Save Update';
+         window.UI.toast('Photo upload failed: ' + (r.error || 'try again'), 'err');
+         return;
+       }
+-      send(r.photoId);
++      send(r.photoId, a.pt || '');
+     });
+   } else {
+     send(a.photoId || '');
+@@ -862,10 +876,10 @@
+   return dpDbPromise;
+ }
+ function dpKey(id) { return me.name + '|' + today + '|' + id; }
+-function dpPut(id, dataUrl) {
++function dpPut(id, dataUrl, takenAt) {
+   dpOpen().then(function (db) {
+     if (!db) return;
+-    try { db.transaction('photos', 'readwrite').objectStore('photos').put(dataUrl, dpKey(id)); } catch (e) {}
++    try { db.transaction('photos', 'readwrite').objectStore('photos').put({ p: dataUrl, t: takenAt || '' }, dpKey(id)); } catch (e) {}
+   });
+ }
+ function dpDelete(id) {
+diff -u a/docs/API.md b/docs/API.md
+--- a/docs/API.md	2026-10-22 11:27:01.566854660 +0000
++++ b/docs/API.md	2026-10-22 11:27:44.259080076 +0000
+@@ -127,9 +127,10 @@
+ ### `getPhotos` → GET
+ Params: `dateFrom`, `dateTo` (`YYYY-MM-DD`; default the last 7 days; capped at
+ 92 days). Returns `{ ok, dateFrom, dateTo, total, truncated, photos:[{ date,
+-timestamp, staffName, section, taskId, taskName, status, sequence, remarks,
++timestamp, photoTime, staffName, section, taskId, taskName, status, sequence, remarks,
+ photoRef }] }`, newest first, at most 200. Each `photoRef` is then loaded with
+-`getPhoto`.
++`getPhoto`. `photoTime` is when the photo was taken on the phone (`YYYY-MM-DD
++HH:MM:SS` IST), or empty for older photos.
+ 
+ ### `getDashboard` → GET
+ Params: `dateFrom`, `dateTo` (`YYYY-MM-DD`; swapped if reversed; capped at
+diff -u a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+--- a/docs/ARCHITECTURE.md	2026-10-22 11:27:01.566942567 +0000
++++ b/docs/ARCHITECTURE.md	2026-10-22 11:27:44.258393262 +0000
+@@ -100,7 +100,7 @@
+ |---|---|---|
+ | `Checklist_Config` | tasks = source of truth | `Task_ID`, `Section`, `Task_Name`, `Type`, `Mandatory`, `Photo_Required`, `Active`, optional `Assigned_To` |
+ | `Users` | staff accounts | `Name`, `PIN`, `Role`, `Active` |
+-| `Submissions` | append-only audit log | `Timestamp`, `Date`, `Staff_Name`, `Role`, `Section`, `Task_ID`, `Task_Name`, `Type`, `Response`, `Photo_URL`, `Status`, `Remarks`, `Sequence`, `Override_Reason`, `Submission_ID` |
++| `Submissions` | append-only audit log | `Timestamp`, `Date`, `Staff_Name`, `Role`, `Section`, `Task_ID`, `Task_Name`, `Type`, `Response`, `Photo_URL`, `Status`, `Remarks`, `Sequence`, `Override_Reason`, `Submission_ID`, `Photo_Time` (when the photo was taken; added automatically) |
+ | `Settings` | key/value store | `Key`, `Value` (uses `Store_Name`, `Store_Location`, …) |
+ 
+ Mapping rules (`mapColumns(headers, kind)` in `mps-core.gs`):
+diff -u a/scripts/make-workbook-template.py b/scripts/make-workbook-template.py
+--- a/scripts/make-workbook-template.py	2026-10-22 11:27:01.570405816 +0000
++++ b/scripts/make-workbook-template.py	2026-10-22 11:27:10.517885373 +0000
+@@ -26,7 +26,7 @@
+ SUBMISSION_HEADERS = [
+     "Timestamp", "Date", "Staff_Name", "Role", "Section", "Task_ID",
+     "Task_Name", "Type", "Response", "Photo_URL", "Status", "Remarks",
+-    "Sequence", "Override_Reason", "Submission_ID",
++    "Sequence", "Override_Reason", "Submission_ID", "Photo_Time",
+ ]
+ 
+ 
+diff -u a/tests/pages.test.js b/tests/pages.test.js
+--- a/tests/pages.test.js	2026-10-22 11:27:01.571174569 +0000
++++ b/tests/pages.test.js	2026-10-22 11:27:44.257611296 +0000
+@@ -232,7 +232,7 @@
+   // (a.p set) it uploads and sends r.photoId, never the retained old id;
+   // the retained id is only the fallback when no new photo is pending.
+   const saveEdit = src.slice(src.indexOf('function saveEdit('));
+-  assert.match(saveEdit, /if \(a\.p && a\.p\.indexOf\('data:'\) === 0\)[\s\S]*?send\(r\.photoId\)/,
++  assert.match(saveEdit, /if \(a\.p && a\.p\.indexOf\('data:'\) === 0\)[\s\S]*?send\(r\.photoId(?:, a\.pt \|\| '')?\)/,
+     'saveEdit must send the freshly uploaded photo id when a new photo is pending');
+   assert.match(saveEdit, /send\(a\.photoId \|\| ''\)/,
+     'saveEdit falls back to the stored photo id only when no new photo is pending');
+@@ -370,7 +370,7 @@
+ test('regression: draft photos are kept in IndexedDB and restored', () => {
+   const src = read('checklist.html');
+   assert.match(src, /indexedDB\.open\('mps_draft_photos'/, 'drafts must store photos in IndexedDB');
+-  assert.match(src, /if \(!isEdit\) dpPut\(id, dataUrl\)/, 'a picked photo must be saved');
++  assert.match(src, /if \(!isEdit\) dpPut\(id, dataUrl(?:, takenAt)?\)/, 'a picked photo must be saved');
+   assert.match(src, /if \(!isEdit\) dpDelete\(id\)/, 'a removed photo must be deleted');
+   assert.match(src, /dpDelete\(e\.task\.taskId\)/, 'a submitted photo must be deleted from the device');
+   assert.match(src, /dpLoadAll\(\)\.then/, 'photos must be restored before the first render');
+@@ -408,3 +408,53 @@
+   assert.strictEqual(cap.truncated, true);
+   assert.ok(!('row' in r.photos[0]) && !('role' in r.photos[0]), 'only gallery fields are returned');
+ });
++
++// ── photo capture time ────────────────────────────────────────────
++test('core: cleanPhotoTime accepts a recent IST time and drops bad ones', () => {
++  const core = require('../backend/mps-core.gs');
++  const now = Date.parse('2026-10-22T10:00:00+05:30');
++  assert.strictEqual(core.cleanPhotoTime('2026-10-22 09:14:05', now), '2026-10-22 09:14:05');
++  assert.strictEqual(core.cleanPhotoTime('2026-10-22 10:03:00', now), '2026-10-22 10:03:00', '5 min clock skew is tolerated');
++  assert.strictEqual(core.cleanPhotoTime('2026-10-22 10:30:00', now), '', 'future time dropped');
++  assert.strictEqual(core.cleanPhotoTime('2026-10-19 09:00:00', now), '', 'older than 36 h dropped');
++  assert.strictEqual(core.cleanPhotoTime('22/10/2026 09:00', now), '', 'wrong format dropped');
++  assert.strictEqual(core.cleanPhotoTime('', now), '');
++  assert.strictEqual(core.cleanPhotoTime('2026-13-45 99:99:99', now), '', 'impossible date dropped');
++});
++
++test('core: validateEntries keeps the photo time only when there is a photo', () => {
++  const core = require('../backend/mps-core.gs');
++  const now = Date.parse('2026-10-22T10:00:00+05:30');
++  const tasks = { T1: { taskId: 'T1', taskName: 'Shop front', section: 'Opening', type: 'photo', photoRequired: true, mandatory: false, active: true } };
++  const ok = core.validateEntries([{ taskId: 'T1', response: 'Photo', photoRef: 'FILEID1234567', photoTime: '2026-10-22 09:14:05' }], tasks, now);
++  assert.ok(ok.ok, JSON.stringify(ok.errors));
++  assert.strictEqual(ok.clean[0].photoTime, '2026-10-22 09:14:05');
++  const forged = core.validateEntries([{ taskId: 'T1', response: 'Photo', photoRef: 'FILEID1234567', photoTime: '2030-01-01 00:00:00' }], tasks, now);
++  assert.strictEqual(forged.clean[0].photoTime, '', 'a forged future time is not stored');
++});
++
++test('core: listPhotos fills the capture time from any row of the same photo and sorts by it', () => {
++  const core = require('../backend/mps-core.gs');
++  const mk = (date, ts, ref, pt) => ({ date, timestamp: ts, photoRef: ref, photoTime: pt, staffName: 'A', taskId: 'T1', taskName: 'Task', section: 'S', status: 'OK', sequence: 'First', remarks: '' });
++  const r = core.listPhotos([
++    mk('2026-10-21', '2026-10-21 18:00:00', 'f1', '2026-10-21 09:00:00'),
++    mk('2026-10-21', '2026-10-21 19:00:00', 'f1', ''),                      // update row, no time
++    mk('2026-10-21', '2026-10-21 17:00:00', 'f2', '2026-10-21 12:30:00')
++  ], '2026-10-21', '2026-10-21', 200);
++  assert.deepStrictEqual(r.photos.map((p) => p.photoRef), ['f2', 'f1'], 'sorted by capture time, newest first');
++  assert.strictEqual(r.photos[1].photoTime, '2026-10-21 09:00:00');
++});
++
++test('photo time flows through the whole app', () => {
++  const page = read('checklist.html');
++  const api = read('backend/MPS_BACKEND.gs');
++  const admin = read('admin.html');
++  assert.match(page, /var takenAt = window\.Dates\.now\(\)\.date/, 'time is captured when the photo is chosen');
++  assert.match(page, /a\.pt = takenAt/, 'time is kept with the photo');
++  assert.match(page, /photoTime: e\.photoRef \? \(e\.photoTime \|\| ''\) : ''/, 'time is sent with the submission');
++  assert.match(page, /put\(\{ p: dataUrl, t: takenAt \|\| '' \}/, 'time survives a saved draft');
++  assert.match(page, /fmtPhotoTime\(a\.photoTime\)/, 'staff see the photo time on completed tasks');
++  assert.match(api, /'Submission_ID', 'Photo_Time'\]/, 'Photo_Time column is created automatically');
++  assert.match(api, /c\.photoTime/, 'photo time is written to the sheet');
++  assert.match(admin, /Taken time not recorded/, 'admin gallery shows the capture time');
++});

@@ -1,0 +1,15 @@
+# dependencies (none today, but keep out if added later)
+node_modules/
+
+# build output
+dist/
+
+# environment / secrets — NEVER commit
+.env
+.env.*
+!.env.example
+
+# local scratch
+*.log
+.DS_Store
+Thumbs.db

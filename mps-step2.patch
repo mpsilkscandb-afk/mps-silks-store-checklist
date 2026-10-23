@@ -1,0 +1,447 @@
+diff -ru -x node_modules -x dist state1/admin.html mps-silks-store-checklist/admin.html
+--- a/admin.html	2026-10-22 10:42:25.261685459 +0000
++++ b/admin.html	2026-10-22 10:41:48.385958981 +0000
+@@ -12,6 +12,17 @@
+   .panel { display: none; padding: 16px; max-width: 980px; margin: 0 auto; padding-bottom: 60px; }
+   .panel.active { display: block; }
+   .panel-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 12px; gap: 10px; flex-wrap: wrap; }
++  .ph-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
++  .ph-filter label { font-size: 12px; font-weight: 700; color: var(--ink-60); display: flex; align-items: center; gap: 6px; }
++  .ph-filter input[type=date] { padding: 7px 8px; border: 1.5px solid var(--border); border-radius: var(--r-sm); background: var(--paper); font-size: 13px; }
++  .ph-info { font-size: 12px; color: var(--ink-60); margin-bottom: 10px; }
++  .ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
++  .ph-card { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); padding: 10px; }
++  .ph-card .ph-date { font-size: 11px; font-weight: 700; color: var(--maroon); }
++  .ph-card .ph-task { font-size: 13px; font-weight: 700; margin: 3px 0; }
++  .ph-card .ph-meta { font-size: 11px; color: var(--ink-60); margin-bottom: 8px; }
++  .ph-card .ph-view { width: 100%; min-height: 90px; display: flex; align-items: center; justify-content: center; background: var(--ivory); border-radius: var(--r-sm); font-size: 12px; font-weight: 700; color: var(--maroon); cursor: pointer; text-align: center; }
++  .ph-card .ph-view img { width: 100%; border-radius: var(--r-sm); display: block; }
+   .panel-head h2 { font-family: var(--font-head); font-size: 19px; color: var(--maroon); }
+   .filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+   .search-inp { flex: 1; min-width: 170px; padding: 9px 12px; border-radius: var(--r-sm); border: 1.5px solid var(--border-strong); font-size: 13px; background: var(--paper); }
+@@ -60,6 +71,7 @@
+ <div class="tabs" style="top:69px">
+   <button class="tab active" data-tabbtn="tasks">&#9776; Tasks</button>
+   <button class="tab" data-tabbtn="users">&#128100; Staff</button>
++  <button class="tab" data-tabbtn="photos">&#128247; Photos</button>
+   <button class="tab" data-tabbtn="settings">&#9881; Settings</button>
+ </div>
+ 
+@@ -94,6 +106,21 @@
+ </div>
+ 
+ <!-- SETTINGS -->
++<!-- PHOTOS -->
++<div class="panel" id="panel-photos">
++  <div class="panel-head"><h2>Uploaded Photos</h2></div>
++  <div class="ph-filter">
++    <label>From <input type="date" id="phFrom"/></label>
++    <label>To <input type="date" id="phTo"/></label>
++    <button class="btn sm" id="phShow">Show</button>
++    <button class="btn sm ghost" data-phq="0">Today</button>
++    <button class="btn sm ghost" data-phq="6">Last 7 days</button>
++    <button class="btn sm ghost" data-phq="29">Last 30 days</button>
++  </div>
++  <div id="phInfo" class="ph-info"></div>
++  <div id="phGrid" class="ph-grid"></div>
++</div>
++
+ <div class="panel" id="panel-settings">
+   <div class="panel-head"><h2>Settings</h2></div>
+   <div class="setting-card" style="max-width:520px">
+@@ -159,6 +186,14 @@
+   </div>
+ </div>
+ 
++<div class="modal-overlay" id="photoModal" onclick="closePhotoModal()">
++  <div class="modal" onclick="event.stopPropagation()">
++    <h3>Photo</h3>
++    <div style="text-align:center"><img id="photoModalImg" alt="Photo"/></div>
++    <div class="modal-btns"><button class="btn ghost" onclick="closePhotoModal()">Close</button></div>
++  </div>
++</div>
++
+ <script src="js/config.js"></script>
+ <script src="js/auth.js"></script>
+ <script src="js/api.js"></script>
+@@ -180,12 +215,74 @@
+   b.addEventListener('click', function () {
+     var tab = b.getAttribute('data-tabbtn');
+     document.querySelectorAll('[data-tabbtn]').forEach(function (x) { x.classList.toggle('active', x === b); });
+-    ['tasks', 'users', 'settings'].forEach(function (t) {
++    ['tasks', 'users', 'photos', 'settings'].forEach(function (t) {
+       document.getElementById('panel-' + t).classList.toggle('active', t === tab);
+     });
+   });
+ });
+ 
++// ── photos gallery (all days, not just today) ─────────────────
++var phLoaded = false;
++function phSetRange(daysBack) {
++  var today = window.Dates.today();
++  document.getElementById('phTo').value = today;
++  document.getElementById('phFrom').value = window.Dates.addDays(today, -daysBack);
++}
++function loadPhotos() {
++  var from = document.getElementById('phFrom').value;
++  var to = document.getElementById('phTo').value;
++  var info = document.getElementById('phInfo');
++  var grid = document.getElementById('phGrid');
++  info.textContent = 'Loading photos...';
++  grid.innerHTML = '';
++  window.MPS_API.get('getPhotos', { dateFrom: from, dateTo: to }).then(function (r) {
++    if (!r.ok) { info.textContent = r.error || 'Could not load photos.'; return; }
++    phLoaded = true;
++    info.textContent = r.total + ' photo' + (r.total === 1 ? '' : 's') + ' from ' + r.dateFrom + ' to ' + r.dateTo
++      + (r.truncated ? ' (showing the newest ' + r.photos.length + ' — narrow the dates to see the rest)' : '')
++      + '. Tap a photo box to load it.';
++    if (!r.photos.length) { grid.innerHTML = '<div class="empty">No photos in this date range.</div>'; return; }
++    r.photos.forEach(function (ph) {
++      var card = document.createElement('div');
++      card.className = 'ph-card';
++      card.innerHTML = '<div class="ph-date">' + window.UI.esc(ph.date) + ' · ' + window.UI.esc(String(ph.timestamp).slice(11, 16)) + '</div>'
++        + '<div class="ph-task">' + window.UI.esc(ph.taskName || ph.taskId) + '</div>'
++        + '<div class="ph-meta">' + window.UI.esc(ph.staffName) + (ph.section ? ' · ' + window.UI.esc(ph.section) : '')
++        + (ph.status ? ' · ' + window.UI.esc(ph.status) : '') + '</div>'
++        + '<div class="ph-view" data-file="' + window.UI.esc(ph.photoRef) + '">&#128247; Tap to load photo</div>';
++      grid.appendChild(card);
++    });
++  });
++}
++document.getElementById('phShow').addEventListener('click', loadPhotos);
++document.querySelectorAll('[data-phq]').forEach(function (b) {
++  b.addEventListener('click', function () { phSetRange(+b.getAttribute('data-phq')); loadPhotos(); });
++});
++document.getElementById('phGrid').addEventListener('click', function (e) {
++  var box = e.target.closest('.ph-view');
++  if (!box || box.getAttribute('data-busy')) return;
++  var img = box.querySelector('img');
++  if (img) { window.openPhoto(img.src); return; }       // already loaded → enlarge
++  box.setAttribute('data-busy', '1');
++  box.textContent = 'Loading...';
++  window.MPS_API.photoUrl(box.getAttribute('data-file')).then(function (url) {
++    box.innerHTML = '<img alt="Task photo"/>';
++    box.querySelector('img').src = url;
++    box.removeAttribute('data-busy');
++  }).catch(function (err) {
++    box.textContent = (err && err.message) || 'Photo unavailable. Tap to retry.';
++    box.removeAttribute('data-busy');
++  });
++});
++window.openPhoto = function (src) {
++  document.getElementById('photoModalImg').src = src;
++  document.getElementById('photoModal').classList.add('open');
++};
++window.closePhotoModal = function () { document.getElementById('photoModal').classList.remove('open'); };
++document.querySelector('[data-tabbtn="photos"]').addEventListener('click', function () {
++  if (!phLoaded) { phSetRange(6); loadPhotos(); }
++});
++
+ // ── load ──────────────────────────────────────────────────────
+ function loadAll() {
+   var loadEl = document.getElementById('pg-load');
+diff -ru -x node_modules -x dist state1/backend/MPS_BACKEND.gs mps-silks-store-checklist/backend/MPS_BACKEND.gs
+--- a/backend/MPS_BACKEND.gs	2026-10-22 10:42:25.272153356 +0000
++++ b/backend/MPS_BACKEND.gs	2026-10-22 10:41:48.384731937 +0000
+@@ -59,6 +59,7 @@
+       case 'getUsers':     result = actionGetUsers(p);      break;
+       case 'getSettings':  result = actionGetSettings(p);   break;
+       case 'getPhoto':     result = actionGetPhoto(p);      break;
++      case 'getPhotos':    result = actionGetPhotos(p);     break;
+       case 'health':       result = { ok: true, app: 'mps-silks-checklist', v: 1 }; break;
+       default:             result = { ok: false, error: 'Unknown action.', code: 'BAD_ACTION' };
+     }
+@@ -890,6 +891,23 @@
+   return { ok: true, dataUrl: 'data:' + mime + ';base64,' + Utilities.base64Encode(blob.getBytes()) };
+ }
+ 
++// Admin photo gallery: every photo in a date range (default: last 7 days).
++function actionGetPhotos(p) {
++  var auth = requireSession_(p, true);
++  if (auth.error) return { ok: false, error: auth.error, code: auth.code };
++  var today = todayIst_();
++  var dateTo = MPSCore.normDateCell(p.dateTo) || today;
++  var dateFrom = MPSCore.normDateCell(p.dateFrom) || MPSCore.addDays(dateTo, -6);
++  if (dateFrom > dateTo) { var tmp = dateFrom; dateFrom = dateTo; dateTo = tmp; }
++  var days = MPSCore.dayRange(dateFrom, dateTo, 92);
++  if (!days.length) return { ok: false, error: 'Invalid date range.', code: 'VALIDATION' };
++  dateFrom = days[0]; dateTo = days[days.length - 1];
++  var m = readMatrix_('Submissions');
++  var subs = MPSCore.normalizeSubmissions(m.headers, m.rows);
++  var res = MPSCore.listPhotos(subs, dateFrom, dateTo, 200);
++  return { ok: true, dateFrom: dateFrom, dateTo: dateTo, total: res.total, truncated: res.truncated, photos: res.photos };
++}
++
+ // ── dashboard ──────────────────────────────────────────────────
+ function actionGetDashboard(p) {
+   var auth = requireSession_(p, true);
+diff -ru -x node_modules -x dist state1/backend/mps-core.gs mps-silks-store-checklist/backend/mps-core.gs
+--- a/backend/mps-core.gs	2026-10-22 10:42:25.261733658 +0000
++++ b/backend/mps-core.gs	2026-10-22 10:41:48.383725901 +0000
+@@ -703,6 +703,33 @@
+     return def;
+   }
+ 
++  // Photos taken in a date range, newest first (admin photo gallery).
++  // subs: normalized submissions. Never exposes anything but the Drive file id.
++  function listPhotos(subs, dateFrom, dateTo, limit) {
++    var max = limit > 0 ? limit : 200;
++    var all = (subs || []).filter(function (s) {
++      return s && s.photoRef && s.date && s.date >= dateFrom && s.date <= dateTo;
++    }).sort(function (a, b) {
++      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
++      return String(b.timestamp) < String(a.timestamp) ? -1 : (String(b.timestamp) > String(a.timestamp) ? 1 : 0);
++    });
++    var seen = {};
++    var unique = all.filter(function (s) {          // same photo can appear on several rows
++      if (seen[s.photoRef]) return false;
++      seen[s.photoRef] = true;
++      return true;
++    });
++    return {
++      total: unique.length,
++      truncated: unique.length > max,
++      photos: unique.slice(0, max).map(function (s) {
++        return { date: s.date, timestamp: s.timestamp, staffName: s.staffName, section: s.section,
++                 taskId: s.taskId, taskName: s.taskName, status: s.status, sequence: s.sequence,
++                 remarks: s.remarks, photoRef: s.photoRef };
++      })
++    };
++  }
++
+   return {
+     IST_TZ: IST_TZ,
+     str: str,
+@@ -730,6 +757,7 @@
+     deriveStatus: deriveStatus,
+     validateEntries: validateEntries,
+     computeDashboard: computeDashboard,
++    listPhotos: listPhotos,
+     tasksForUser: tasksForUser,
+     latestForDay: latestForDay,
+     sectionsFor: sectionsFor,
+diff -ru -x node_modules -x dist state1/checklist.html mps-silks-store-checklist/checklist.html
+--- a/checklist.html	2026-10-22 10:42:25.272478988 +0000
++++ b/checklist.html	2026-10-22 10:42:10.112125087 +0000
+@@ -195,7 +195,7 @@
+ 
+ document.getElementById('draftBtn').addEventListener('click', function () {
+   saveDraft(true);
+-  window.UI.toast('Draft saved on this device. Photos are not saved in drafts.', 'ok');
++  window.UI.toast('Draft saved on this device (photos included).', 'ok');
+ });
+ 
+ // ── load ──────────────────────────────────────────────────────
+@@ -245,9 +245,23 @@
+     }
+     document.getElementById('tbSub').textContent =
+       window.Dates.formatFull(today) + ' · ' + me.name;
+-    build();
+-    restoreServerPhotos();
+-    loadEl.style.display = 'none';
++    // bring back photos saved with the draft on this device, then render
++    dpLoadAll().then(function (saved) {
++      Object.keys(saved).forEach(function (tid) {
++        var t0 = findTask(tid);
++        if (!t0 || (ans[tid] && ans[tid]._done)) { dpDelete(tid); return; }
++        var a0 = getAns(tid);
++        a0.p = saved[tid];
++        a0._needPhoto = false;
++        if (t0.type === 'photo') { a0.v = 'Photo'; a0._status = 'OK'; }
++      });
++      build();
++      Object.keys(saved).forEach(function (tid) {
++        if (ans[tid] && ans[tid].p) showPreview(tid, ans[tid].p, null);
++      });
++      restoreServerPhotos();
++      loadEl.style.display = 'none';
++    });
+   });
+ }
+ loadChecklist();
+@@ -544,6 +558,7 @@
+       var a = getAns(id);
+       a.p = dataUrl;
+       a._needPhoto = false;
++      if (!isEdit) dpPut(id, dataUrl);
+       a.photoId = isEdit ? a.photoId : '';   // edit keeps the stored id until a new upload succeeds
+       if (!isEdit) {
+         var t = findTask(id);
+@@ -573,6 +588,7 @@
+   var isEdit = /e$/.test(key);
+   var a = getAns(id);
+   delete a.p;
++  if (!isEdit) dpDelete(id);
+   if (isEdit) { /* keep the previously submitted photoId on the server */ }
+   else { a.photoId = a._origPhotoId || ''; if (a.v === 'Photo') { delete a.v; a._status = ''; } }
+   var prev = document.querySelector('[data-phprev="' + key + '"]');
+@@ -739,6 +755,7 @@
+       }, 'First');
+       if (e.photoRef) { a.photoId = e.photoRef; a._origPhotoId = e.photoRef; }
+       delete a.p;
++      dpDelete(e.task.taskId);
+     });
+     pendingBatchId = null;
+     pendingBatchKey = '';
+@@ -826,7 +843,64 @@
+   }
+ }
+ 
+-// ── local drafts (answers only; photos are not persisted) ─────
++// ── draft photos: kept in this browser's IndexedDB until submitted ──
++// (answers go to localStorage; photos are too big for it). Nothing here is
++// ever sent anywhere until the staff member presses Submit.
++var dpDbPromise = null;
++function dpOpen() {
++  if (!dpDbPromise) {
++    dpDbPromise = new Promise(function (resolve) {
++      try {
++        var req = window.indexedDB.open('mps_draft_photos', 1);
++        req.onupgradeneeded = function () { req.result.createObjectStore('photos'); };
++        req.onsuccess = function () { resolve(req.result); };
++        req.onerror = function () { resolve(null); };
++        req.onblocked = function () { resolve(null); };
++      } catch (e) { resolve(null); }
++    });
++  }
++  return dpDbPromise;
++}
++function dpKey(id) { return me.name + '|' + today + '|' + id; }
++function dpPut(id, dataUrl) {
++  dpOpen().then(function (db) {
++    if (!db) return;
++    try { db.transaction('photos', 'readwrite').objectStore('photos').put(dataUrl, dpKey(id)); } catch (e) {}
++  });
++}
++function dpDelete(id) {
++  dpOpen().then(function (db) {
++    if (!db) return;
++    try { db.transaction('photos', 'readwrite').objectStore('photos').delete(dpKey(id)); } catch (e) {}
++  });
++}
++// Returns { taskId: dataUrl } for today; removes this user's older-day leftovers.
++function dpLoadAll() {
++  return dpOpen().then(function (db) {
++    if (!db) return {};
++    return new Promise(function (resolve) {
++      var out = {}, mine = me.name + '|', todayPfx = me.name + '|' + today + '|';
++      try {
++        var store = db.transaction('photos', 'readwrite').objectStore('photos');
++        var req = store.openCursor();
++        req.onsuccess = function () {
++          var cur = req.result;
++          if (!cur) { resolve(out); return; }
++          var k = String(cur.key);
++          if (k.indexOf(todayPfx) === 0) out[k.slice(todayPfx.length)] = cur.value;
++          else if (k.indexOf(mine) === 0) cur.delete();
++          cur.continue();
++        };
++        req.onerror = function () { resolve(out); };
++      } catch (e) { resolve({}); }
++    });
++  });
++}
++function dpClearAll() {
++  dpLoadAll().then(function (m) { Object.keys(m).forEach(dpDelete); });
++}
++
++// ── local drafts (answers in localStorage; photos in IndexedDB) ─
+ var draftTimer = null;
+ function autosave() {
+   clearTimeout(draftTimer);
+@@ -858,7 +932,7 @@
+     return d;
+   } catch (e) { return null; }
+ }
+-function clearDraft() { try { localStorage.removeItem(draftKey()); } catch (e) {} }
++function clearDraft() { try { localStorage.removeItem(draftKey()); } catch (e) {} dpClearAll(); }
+ 
+ // session expiry notice from the API layer
+ window.addEventListener('storage', function () { /* no-op; kept for future */ });
+diff -ru -x node_modules -x dist state1/docs/API.md mps-silks-store-checklist/docs/API.md
+--- a/docs/API.md	2026-10-22 10:42:25.273486017 +0000
++++ b/docs/API.md	2026-10-22 10:42:20.150923437 +0000
+@@ -124,6 +124,13 @@
+ 
+ ## Admin actions (session with admin role, server-enforced)
+ 
++### `getPhotos` → GET
++Params: `dateFrom`, `dateTo` (`YYYY-MM-DD`; default the last 7 days; capped at
++92 days). Returns `{ ok, dateFrom, dateTo, total, truncated, photos:[{ date,
++timestamp, staffName, section, taskId, taskName, status, sequence, remarks,
++photoRef }] }`, newest first, at most 200. Each `photoRef` is then loaded with
++`getPhoto`.
++
+ ### `getDashboard` → GET
+ Params: `dateFrom`, `dateTo` (`YYYY-MM-DD`; swapped if reversed; capped at
+ 92 days). Defaults to today.
+diff -ru -x node_modules -x dist state1/tests/pages.test.js mps-silks-store-checklist/tests/pages.test.js
+--- a/tests/pages.test.js	2026-10-22 10:42:25.273893841 +0000
++++ b/tests/pages.test.js	2026-10-22 10:42:20.150257790 +0000
+@@ -83,8 +83,8 @@
+     }
+   }
+   assert.deepStrictEqual(missing, []);
+-  // 7 identifier GET routes (health returns a literal) + 11 POST routes
+-  assert.strictEqual(count, 18, 'expected 18 routed handler actions, saw ' + count);
++  // 8 identifier GET routes (health returns a literal) + 11 POST routes
++  assert.strictEqual(count, 19, 'expected 19 routed handler actions, saw ' + count);
+ });
+ 
+ test('admin task actions exist and are lock-protected', () => {
+@@ -342,7 +342,7 @@
+ 
+ test('regression: server photos are shown after the checklist loads', () => {
+   const src = read('checklist.html');
+-  assert.match(src, /build\(\);\s*restoreServerPhotos\(\);\s*loadEl\.style\.display/,
++  assert.match(src, /build\(\);[\s\S]*?restoreServerPhotos\(\);\s*loadEl\.style\.display/,
+     'restoreServerPhotos() must run right after the first build()');
+ });
+ 
+@@ -365,3 +365,46 @@
+   assert.match(be, /Utilities\.base64Encode\(blob\.getBytes\(\)\)/, 'backend must return base64');
+   assert.doesNotMatch(be, /createTextOutput\(blob\.getBytes\(\)\)/, 'backend must not send raw bytes via ContentService');
+ });
++
++// ── draft photos on device + admin photo gallery ──────────────────
++test('regression: draft photos are kept in IndexedDB and restored', () => {
++  const src = read('checklist.html');
++  assert.match(src, /indexedDB\.open\('mps_draft_photos'/, 'drafts must store photos in IndexedDB');
++  assert.match(src, /if \(!isEdit\) dpPut\(id, dataUrl\)/, 'a picked photo must be saved');
++  assert.match(src, /if \(!isEdit\) dpDelete\(id\)/, 'a removed photo must be deleted');
++  assert.match(src, /dpDelete\(e\.task\.taskId\)/, 'a submitted photo must be deleted from the device');
++  assert.match(src, /dpLoadAll\(\)\.then/, 'photos must be restored before the first render');
++  assert.doesNotMatch(src, /toSave\[k\] = \{[^}]*\bp:/, 'photo data must never go into localStorage');
++});
++
++test('admin: Photos tab lists photos for any date range', () => {
++  const admin = read('admin.html');
++  assert.match(admin, /data-tabbtn="photos"/);
++  assert.match(admin, /id="panel-photos"/);
++  assert.match(admin, /MPS_API\.get\('getPhotos'/);
++  assert.match(admin, /\['tasks', 'users', 'photos', 'settings'\]/, 'tab switcher must know the photos panel');
++  const be = read('backend/MPS_BACKEND.gs');
++  assert.match(be, /case 'getPhotos':\s+result = actionGetPhotos\(p\)/);
++  assert.match(be, /function actionGetPhotos\(p\) \{\s+var auth = requireSession_\(p, true\)/, 'getPhotos must be admin-only');
++});
++
++test('core: listPhotos filters by date range, sorts newest first, dedupes, caps', () => {
++  const core = require('../backend/mps-core.gs');
++  const mk = (date, ts, ref, extra) => Object.assign({ date, timestamp: ts, photoRef: ref, staffName: 'A', taskId: 'T1', taskName: 'Task', section: 'S', status: 'OK', sequence: 'First', remarks: '' }, extra);
++  const subs = [
++    mk('2026-10-20', '2026-10-20 09:00:00', 'f1'),
++    mk('2026-10-21', '2026-10-21 08:00:00', 'f2'),
++    mk('2026-10-21', '2026-10-21 10:00:00', 'f3'),
++    mk('2026-10-22', '2026-10-22 08:00:00', ''),          // no photo
++    mk('2026-10-19', '2026-10-19 08:00:00', 'f0'),         // out of range
++    mk('2026-10-21', '2026-10-21 10:05:00', 'f3')          // same photo again
++  ];
++  const r = core.listPhotos(subs, '2026-10-20', '2026-10-22', 200);
++  assert.deepStrictEqual(r.photos.map((p) => p.photoRef), ['f3', 'f2', 'f1']);
++  assert.strictEqual(r.total, 3);
++  assert.strictEqual(r.truncated, false);
++  const cap = core.listPhotos(subs, '2026-10-20', '2026-10-22', 2);
++  assert.strictEqual(cap.photos.length, 2);
++  assert.strictEqual(cap.truncated, true);
++  assert.ok(!('row' in r.photos[0]) && !('role' in r.photos[0]), 'only gallery fields are returned');
++});

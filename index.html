@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>MPS Silks — Store Operations Checklist</title>
+<meta name="theme-color" content="#7A1420"/>
+<link rel="icon" type="image/png" href="images/mps-logo.png"/>
+<link rel="apple-touch-icon" href="images/mps-logo.png"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="css/theme.css"/>
+<style>
+  html, body { height: 100%; }
+  body {
+    background:
+      radial-gradient(1100px 500px at 50% -120px, rgba(201, 162, 39, .22), transparent 62%),
+      linear-gradient(180deg, var(--maroon-dark) 0%, var(--maroon-deep) 100%);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .wrap { display: flex; flex-direction: column; align-items: center; width: 100%; padding: 20px; }
+  .logo-chip {
+    width: 104px; height: 104px;
+    background: var(--cream);
+    border: 2px solid var(--gold-light);
+    border-radius: 22px;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, .38);
+    display: flex; align-items: center; justify-content: center;
+    padding: 9px; margin-bottom: 16px;
+  }
+  .logo-chip img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .s-name { font-family: var(--font-head); font-size: 25px; color: #FFF8E7; margin-bottom: 4px; text-align: center; }
+  .tagline { font-size: 10.5px; color: var(--gold-light); letter-spacing: .16em; text-transform: uppercase; margin-bottom: 26px; text-align: center; }
+  .pin-label { font-size: 10.5px; color: rgba(255, 248, 231, .55); letter-spacing: .14em; text-transform: uppercase; margin-bottom: 12px; }
+  .dots { display: flex; gap: 15px; justify-content: center; margin-bottom: 24px; }
+  .dot { width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(229, 199, 107, .45); background: transparent; transition: all .15s; }
+  .dot.on { background: var(--gold-light); border-color: var(--gold-light); box-shadow: 0 0 9px rgba(229, 199, 107, .55); }
+  .pad { display: grid; grid-template-columns: repeat(3, 68px); gap: 9px; }
+  .k {
+    width: 68px; height: 68px; border-radius: 14px;
+    background: rgba(255, 248, 231, .08);
+    border: 1px solid rgba(229, 199, 107, .22);
+    color: #FFF8E7; font-size: 21px; font-weight: 600;
+    transition: background .1s, transform .08s;
+  }
+  .k:active { background: rgba(201, 162, 39, .38); transform: scale(.93); }
+  .k-del { background: rgba(179, 38, 30, .55); color: #FFC9C2; font-size: 16px; }
+  .msg { font-size: 12.5px; min-height: 34px; margin-top: 13px; text-align: center; color: #FFB3A8; max-width: 300px; }
+  .msg.info { color: rgba(255, 248, 231, .55); }
+  .go {
+    display: block; margin: 16px auto 0; width: 222px; height: 48px;
+    border-radius: 12px; background: var(--gold); color: #5A0F16;
+    font-size: 15px; font-weight: 700; letter-spacing: .05em;
+    transition: opacity .15s, transform .08s;
+  }
+  .go:disabled { opacity: .35; cursor: not-allowed; }
+  .go:not(:disabled):active { transform: scale(.98); }
+  .loader { display: none; flex-direction: column; align-items: center; gap: 12px; margin-top: 12px; }
+  .loader.show { display: flex; }
+  .loader .spinner { border-color: rgba(229, 199, 107, .25); border-top-color: var(--gold-light); }
+  .load-txt { font-size: 12.5px; color: rgba(255, 248, 231, .6); }
+  .foot { position: fixed; bottom: 16px; font-size: 10px; color: rgba(255, 248, 231, .3); letter-spacing: .08em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo-chip"><img src="images/mps-logo.png" alt="MPS Silks"/></div>
+  <div class="s-name">MPS Silks</div>
+  <div class="tagline">Store Operations Checklist</div>
+
+  <div id="pinSection">
+    <div class="pin-label">Enter your PIN</div>
+    <div class="dots">
+      <div class="dot" id="d0"></div><div class="dot" id="d1"></div>
+      <div class="dot" id="d2"></div><div class="dot" id="d3"></div>
+    </div>
+    <div class="pad">
+      <button class="k" onclick="kp(1)">1</button><button class="k" onclick="kp(2)">2</button><button class="k" onclick="kp(3)">3</button>
+      <button class="k" onclick="kp(4)">4</button><button class="k" onclick="kp(5)">5</button><button class="k" onclick="kp(6)">6</button>
+      <button class="k" onclick="kp(7)">7</button><button class="k" onclick="kp(8)">8</button><button class="k" onclick="kp(9)">9</button>
+      <button class="k" style="visibility:hidden"></button>
+      <button class="k" onclick="kp(0)">0</button>
+      <button class="k k-del" onclick="kd()">&#9003;</button>
+    </div>
+    <button class="go" id="goBtn" disabled>&#8629; Sign in</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <div class="load-txt" id="loadTxt">Verifying...</div>
+  </div>
+</div>
+<div class="foot">MPS SILKS &middot; KGF</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script>
+(function () {
+  var CFG = window.MPS_CONFIG || {};
+  var PIN_MIN = (CFG.pinLength && CFG.pinLength.min) || 4;
+  var PIN_MAX = (CFG.pinLength && CFG.pinLength.max) || 8;
+  var pin = '';
+
+  // Already signed in? Go straight to the right page.
+  var existing = window.Auth.get();
+  if (existing) {
+    window.location.replace(existing.isAdmin ? 'dashboard.html' : 'checklist.html');
+    return;
+  }
+
+  var params = new URLSearchParams(window.location.search);
+  var msg = params.get('msg');
+  if (msg === 'expired') setMsg('Your session expired. Please sign in again.', '');
+  else if (msg === 'signin') setMsg('Please sign in to continue.', 'info');
+
+  function dots() {
+    for (var i = 0; i < PIN_MAX; i++) {
+      var el = document.getElementById('d' + i);
+      if (!el) continue;
+      if (i < pin.length) el.classList.add('on'); else el.classList.remove('on');
+    }
+    var go = document.getElementById('goBtn');
+    if (go) go.disabled = pin.length < PIN_MIN;
+  }
+  function setMsg(t, cls) {
+    var el = document.getElementById('msg');
+    el.textContent = t;
+    el.className = 'msg' + (cls ? ' ' + cls : '');
+  }
+  window.kp = function (n) {
+    if (pin.length >= PIN_MAX) return;
+    pin += String(n);
+    dots();
+    if (pin.length === PIN_MAX) setTimeout(validate, 180);
+  };
+  window.kd = function () {
+    if (!pin.length) return;
+    pin = pin.slice(0, -1);
+    dots();
+    setMsg('', '');
+  };
+  document.addEventListener('keydown', function (e) {
+    if (e.key >= '0' && e.key <= '9') window.kp(+e.key);
+    else if (e.key === 'Backspace') window.kd();
+    else if (e.key === 'Enter' && pin.length >= PIN_MIN) validate();
+  });
+  // On-screen submit (phones have no Enter key; PINs may be shorter than PIN_MAX).
+  var goBtn = document.getElementById('goBtn');
+  if (goBtn) goBtn.addEventListener('click', function () {
+    if (pin.length >= PIN_MIN && pin.length <= PIN_MAX) validate();
+  });
+
+  function showLoader(txt) {
+    document.getElementById('pinSection').style.display = 'none';
+    document.getElementById('loader').classList.add('show');
+    document.getElementById('loadTxt').textContent = txt || 'Loading...';
+  }
+
+  function validate() {
+    if (!window.MPS_API || !window.MPS_API.configured()) {
+      setMsg((window.MPS_CONFIG && window.MPS_CONFIG.apiEndpoint === '__MPS_API_ENDPOINT__')
+        ? 'App not configured yet — set the API endpoint in js/config.js.'
+        : 'App configuration error. Contact support.', '');
+      return;
+    }
+    setMsg('Verifying...', 'info');
+    showLoader('Verifying...');
+    window.MPS_API.post('login', { pin: pin }).then(function (r) {
+      if (!r.ok) {
+        document.getElementById('loader').classList.remove('show');
+        document.getElementById('pinSection').style.display = '';
+        setMsg(r.error || 'Invalid PIN. Please try again.');
+        pin = '';
+        dots();
+        return;
+      }
+      window.Auth.save({
+        token: r.token,
+        name: r.name,
+        role: r.role,
+        isAdmin: !!r.isAdmin,
+        exp: Date.now() + ((r.expiresInMin || 480) - 5) * 60000
+      });
+      showLoader('Welcome, ' + r.name + '...');
+      window.location.href = r.isAdmin ? 'dashboard.html' : 'checklist.html';
+    });
+  }
+})();
+</script>
+</body>
+</html>

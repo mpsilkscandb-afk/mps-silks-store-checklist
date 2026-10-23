@@ -1,0 +1,418 @@
+diff -ruN -x '*.patch' base/admin.html mps-silks-store-checklist/admin.html
+--- a/admin.html	2026-10-22 12:14:48.064998502 +0000
++++ b/admin.html	2026-10-22 12:14:52.610207087 +0000
+@@ -90,7 +90,7 @@
+   </div>
+   <div class="table-wrap">
+     <table class="data" style="min-width:760px">
+-      <thead><tr><th>ID</th><th>Section</th><th>Task</th><th>Type</th><th>Flags</th><th>Assigned</th><th>Active</th><th>Actions</th></tr></thead>
++      <thead><tr><th>ID</th><th>Section</th><th>Task</th><th>Type</th><th>Frequency</th><th>Flags</th><th>Assigned</th><th>Active</th><th>Actions</th></tr></thead>
+       <tbody id="taskBody"></tbody>
+     </table>
+   </div>
+@@ -156,6 +156,9 @@
+     <div class="field"><label>Photo required</label><select id="f-photo"><option value="No">No</option><option value="Yes">Yes</option></select></div>
+     <div class="field"><label>Active</label><select id="f-active"><option value="Yes">Yes</option><option value="No">No</option></select></div>
+   </div>
++  <div class="field"><label>Frequency</label>
++    <select id="f-frequency"><option value="Daily">Daily</option><option value="Weekly">Weekly (every Friday)</option><option value="Monthly">Monthly (the 28th)</option></select>
++  </div>
+   <div class="field"><label>Assigned to (optional)</label>
+     <input id="f-assignedTo" type="text" placeholder="Leave empty for: everyone"/>
+     <span class="hint">Comma-separated staff names or roles. Empty = visible to all staff.</span>
+@@ -353,12 +356,14 @@
+     tr.className = t.active ? '' : 'inactive-row';
+     var flags = (t.mandatory ? '<span class="badge maroon">M</span> ' : '')
+       + (t.photoRequired ? '<span class="badge gold">&#128247;</span>' : '');
++    var freqLabel = t.frequency === 'weekly' ? 'Weekly' : (t.frequency === 'monthly' ? 'Monthly' : 'Daily');
+     var assigned = (t.assignedTo && t.assignedTo.length && t.assignedTo[0] !== 'all')
+       ? window.UI.esc(t.assignedTo.join(', ')) : '<span style="color:var(--ink-60)">Everyone</span>';
+     tr.innerHTML = '<td><span class="tid">' + window.UI.esc(t.taskId) + '</span></td>'
+       + '<td style="white-space:nowrap">' + window.UI.esc(t.section) + '</td>'
+       + '<td style="max-width:280px">' + window.UI.esc(t.taskName) + '</td>'
+       + '<td><span class="badge">' + window.UI.esc(t.type) + '</span></td>'
++      + '<td style="white-space:nowrap">' + freqLabel + '</td>'
+       + '<td style="white-space:nowrap">' + (flags || '—') + '</td>'
+       + '<td style="font-size:11.5px;white-space:nowrap">' + assigned + '</td>'
+       + '<td><button class="active-toggle ' + (t.active ? 'on' : 'off') + '" data-toggle="' + window.UI.esc(t.taskId) + '" title="Toggle active"></button></td>'
+@@ -388,12 +393,13 @@
+     setVal('f-mandatory', t.mandatory ? 'Yes' : 'No');
+     setVal('f-photo', t.photoRequired ? 'Yes' : 'No');
+     setVal('f-active', t.active ? 'Yes' : 'No');
++    setVal('f-frequency', t.frequency === 'weekly' ? 'Weekly' : (t.frequency === 'monthly' ? 'Monthly' : 'Daily'));
+     setVal('f-assignedTo', (t.assignedTo && t.assignedTo[0] !== 'all') ? t.assignedTo.join(', ') : '');
+   } else {
+     document.getElementById('taskDrawerTitle').textContent = 'Add New Task';
+     ['f-taskName', 'f-newSection'].forEach(function (id) { document.getElementById(id).value = ''; });
+     setVal('f-section', ''); setVal('f-type', 'yesno'); setVal('f-mandatory', 'Yes');
+-    setVal('f-photo', 'No'); setVal('f-active', 'Yes'); setVal('f-assignedTo', '');
++    setVal('f-photo', 'No'); setVal('f-active', 'Yes'); setVal('f-frequency', 'Daily'); setVal('f-assignedTo', '');
+   }
+   document.getElementById('newSecRow').style.display = 'none';
+   document.getElementById('taskOverlay').classList.add('open');
+@@ -420,6 +426,7 @@
+     mandatory: document.getElementById('f-mandatory').value,
+     photoRequired: document.getElementById('f-photo').value,
+     active: document.getElementById('f-active').value,
++    frequency: document.getElementById('f-frequency').value,
+     assignedTo: document.getElementById('f-assignedTo').value.trim()
+   };
+   payload.action = taskId ? 'updateTask' : 'addTask';
+diff -ruN -x '*.patch' base/backend/MPS_BACKEND.gs mps-silks-store-checklist/backend/MPS_BACKEND.gs
+--- a/backend/MPS_BACKEND.gs	2026-10-22 12:14:48.062315420 +0000
++++ b/backend/MPS_BACKEND.gs	2026-10-22 12:14:48.132280241 +0000
+@@ -495,7 +495,8 @@
+     mandatory: t.mandatory,
+     photoRequired: t.photoRequired,
+     active: t.active,
+-    assignedTo: t.assignedTo
++    assignedTo: t.assignedTo,
++    frequency: t.frequency || 'daily'
+   };
+ }
+ 
+@@ -505,7 +506,7 @@
+   var sess = auth.s.sess;
+   var today = todayIst_();
+   var res = loadTasks_(120);
+-  var mine = MPSCore.tasksForUser(res.tasks, sess.name, sess.role);
++  var mine = MPSCore.tasksForUser(res.tasks, sess.name, sess.role, today);
+   var subs = readTodaySubmissions_(today);
+   var latest = MPSCore.latestForDay(subs, today);
+   var sections = MPSCore.sectionsFor(mine).map(function (s) {
+@@ -591,6 +592,11 @@
+     if (p[flags[i]] !== undefined) fields[flags[i]] = MPSCore.normYesNo(p[flags[i]], 'Yes');
+   }
+   if (p.assignedTo !== undefined) fields.assignedTo = MPSCore.cleanText(p.assignedTo, 200);
++  if (p.frequency !== undefined) {
++    var freq = MPSCore.normFrequency(p.frequency);
++    if (!freq) return { ok: false, error: 'Frequency must be Daily, Weekly or Monthly.', code: 'VALIDATION' };
++    fields.frequency = freq.charAt(0).toUpperCase() + freq.slice(1);
++  }
+   return { ok: true, fields: fields };
+ }
+ 
+@@ -628,6 +634,11 @@
+       m = readMatrix_('Checklist_Config');
+       col = MPSCore.mapColumns(m.headers, 'task');
+     }
++    if (fields.frequency !== undefined && col.frequency === undefined) {
++      ensureHeaders_('Checklist_Config', ['Frequency']);
++      m = readMatrix_('Checklist_Config');
++      col = MPSCore.mapColumns(m.headers, 'task');
++    }
+     var taskId = nextTaskId_(m, col);
+     var width = m.headers.length;
+     Object.keys(col).forEach(function (k) { width = Math.max(width, col[k] + 1); });
+@@ -640,6 +651,7 @@
+     if (col.photoRequired !== undefined) row[col.photoRequired] = fields.photoRequired || 'No';
+     if (col.active !== undefined) row[col.active] = fields.active || 'Yes';
+     if (col.assignedTo !== undefined) row[col.assignedTo] = fields.assignedTo || '';
++    if (col.frequency !== undefined) row[col.frequency] = fields.frequency || 'Daily';
+     sheet_('Checklist_Config').appendRow(row);
+     invalidate_('Checklist_Config');
+     return { ok: true, message: 'Task added.', taskId: taskId };
+@@ -660,6 +672,10 @@
+       ensureHeaders_('Checklist_Config', ['Assigned_To']);
+       loc = taskRowLoc_(taskId);
+     }
++    if (fields.frequency !== undefined && loc.col.frequency === undefined) {
++      ensureHeaders_('Checklist_Config', ['Frequency']);
++      loc = taskRowLoc_(taskId);
++    }
+     var sheet = sheet_('Checklist_Config');
+     var keys = Object.keys(fields);
+     for (var i = 0; i < keys.length; i++) {
+@@ -735,16 +751,26 @@
+   var taskRes = loadTasks_(120);
+   var taskMap = {};
+   taskRes.tasks.forEach(function (t) { taskMap[t.taskId] = t; });
+-  // Staff may only submit tasks assigned to them.
++  // Staff may only submit tasks assigned to them, and only on the day they are due
++  // (weekly = Friday, monthly = the 28th).
++  var assignedAll = {};
++  MPSCore.tasksForUser(taskRes.tasks, sess.name, sess.role).forEach(function (t) { assignedAll[t.taskId] = true; });
+   var allowed = {};
+-  MPSCore.tasksForUser(taskRes.tasks, sess.name, sess.role).forEach(function (t) { allowed[t.taskId] = true; });
++  MPSCore.tasksForUser(taskRes.tasks, sess.name, sess.role, today).forEach(function (t) { allowed[t.taskId] = true; });
+   if (entries && entries.length) {
+     entries.forEach(function (e) {
+-      if (e && !allowed[MPSCore.str(e.taskId)]) e._forbidden = true;
++      var eid = e ? MPSCore.str(e.taskId) : '';
++      if (e && !allowed[eid]) {
++        if (assignedAll[eid]) e._notDue = true; else e._forbidden = true;
++      }
+     });
+   }
+   var v = MPSCore.validateEntries(entries, taskMap);
+   if (!v.ok) return { ok: false, error: v.errors[0], errors: v.errors, code: 'VALIDATION' };
++  var notDue = (entries || []).filter(function (e) { return e && e._notDue; });
++  if (notDue.length) {
++    return { ok: false, error: 'Task ' + MPSCore.str(notDue[0].taskId) + ' is not due today.', code: 'NOT_DUE' };
++  }
+   var forbidden = (entries || []).filter(function (e) { return e && e._forbidden; });
+   if (forbidden.length) {
+     return { ok: false, error: 'Task ' + MPSCore.str(forbidden[0].taskId) + ' is not assigned to you.', code: 'FORBIDDEN' };
+diff -ruN -x '*.patch' base/backend/mps-core.gs mps-silks-store-checklist/backend/mps-core.gs
+--- a/backend/mps-core.gs	2026-10-22 12:14:48.062558835 +0000
++++ b/backend/mps-core.gs	2026-10-22 12:14:48.130523662 +0000
+@@ -37,7 +37,8 @@
+       mandatory:     ['mandatory', 'required', 'ismandatory'],
+       photoRequired: ['photorequired', 'photo', 'photoneeded', 'needphoto', 'photographrequired', 'requiresphoto'],
+       active:        ['active', 'enabled', 'isactive'],
+-      assignedTo:    ['assignedto', 'assignee', 'staff', 'staffname', 'assignedrole', 'role', 'role1', 'role2', 'owner']
++      assignedTo:    ['assignedto', 'assignee', 'staff', 'staffname', 'assignedrole', 'role', 'role1', 'role2', 'owner'],
++      frequency:     ['frequency', 'freq', 'taskfrequency', 'repeat', 'recurrence', 'schedule', 'dailyweeklymonthly']
+     },
+     user: {
+       name:   ['name', 'staff', 'employee', 'username', 'fullname', 'staffname'],
+@@ -268,6 +269,32 @@
+     return null;
+   }
+ 
++  // Task frequency: daily (default) | weekly (Fridays) | monthly (the 28th).
++  // Returns the canonical value, or null when the text is not recognised.
++  // A blank cell means daily.
++  function normFrequency(v) {
++    var s = lower(v).replace(/[^a-z]/g, '');
++    if (s === '' || s === 'daily' || s === 'day' || s === 'everyday') return 'daily';
++    if (s === 'weekly' || s === 'week') return 'weekly';
++    if (s === 'monthly' || s === 'month') return 'monthly';
++    return null;
++  }
++  var WEEKLY_DAY = 5;     // Friday (Sunday = 0)
++  var MONTHLY_DATE = 28;  // the 28th exists in every month
++
++  // Is this task due on the given IST day ('YYYY-MM-DD')?
++  // No frequency (or an unreadable day) means daily, so older data keeps working.
++  function isDueOn(task, day) {
++    var f = task && task.frequency;
++    if (!f || f === 'daily') return true;
++    var ms = parseDay(day);
++    if (ms === null) return true;
++    var d = new Date(ms);
++    if (f === 'weekly') return d.getUTCDay() === WEEKLY_DAY;
++    if (f === 'monthly') return d.getUTCDate() === MONTHLY_DATE;
++    return true;
++  }
++
+   // rows: array of arrays (sheet values, excluding header)
+   function normalizeTasks(headers, rows) {
+     var col = mapColumns(headers, 'task');
+@@ -311,6 +338,15 @@
+         }
+       }
+       if (!assignedTo.length) assignedTo = ['all'];
++      var frequency = 'daily';
++      if (col.frequency !== undefined) {
++        var fv = normFrequency(raw[col.frequency]);
++        if (fv === null) {
++          problems.push({ row: rowNo, issue: 'Task ' + taskId + ' has unknown Frequency "' + str(raw[col.frequency]) + '" — treated as Daily. Use Daily, Weekly or Monthly.' });
++          fv = 'daily';
++        }
++        frequency = fv;
++      }
+       tasks.push({
+         row: rowNo,
+         taskId: taskId,
+@@ -320,7 +356,8 @@
+         mandatory: col.mandatory !== undefined ? yes(raw[col.mandatory]) : true,
+         photoRequired: col.photoRequired !== undefined ? yes(raw[col.photoRequired]) : false,
+         active: col.active !== undefined ? (str(raw[col.active]) === '' ? true : yes(raw[col.active])) : true,
+-        assignedTo: assignedTo
++        assignedTo: assignedTo,
++        frequency: frequency
+       });
+     }
+     return { tasks: tasks, problems: problems };
+@@ -521,8 +558,9 @@
+ 
+     // per-day stats
+     var trend = days.map(function (d) {
+-      var assigned = activeTasks.length, submitted = 0, passed = 0, failed = 0;
+-      activeTasks.forEach(function (t) {
++      var dueTasks = activeTasks.filter(function (t) { return isDueOn(t, d); });
++      var assigned = dueTasks.length, submitted = 0, passed = 0, failed = 0;
++      dueTasks.forEach(function (t) {
+         var st = statusOf(d, t);
+         if (st.state === 'PASS') { submitted++; passed++; }
+         else if (st.state === 'FAIL') { submitted++; failed++; }
+@@ -548,6 +586,7 @@
+     var isPast = today && focusDate < today;
+ 
+     activeTasks.forEach(function (t) {
++      if (!isDueOn(t, focusDate)) return;   // weekly / monthly task not due on this day
+       if (!sectionsMap[t.section]) {
+         sectionsMap[t.section] = { section: t.section, assigned: 0, submitted: 0, passed: 0, failed: 0, pending: 0, pct: 0, tasks: [] };
+         sectionOrder.push(t.section);
+@@ -564,6 +603,7 @@
+         mandatory: t.mandatory,
+         photoRequired: t.photoRequired,
+         assignedTo: t.assignedTo.join(', '),
++        frequency: t.frequency || 'daily',
+         state: st.state,
+         status: st.state === 'PENDING' ? 'PENDING' : (st.state === 'FAIL' ? 'FAIL' : 'PASS'),
+         response: st.sub ? st.sub.response : '',
+@@ -676,10 +716,13 @@
+ 
+   // Which tasks are assigned to a given staff member.
+   // Missing/empty assignment ⇒ visible to everyone (single-store default).
+-  function tasksForUser(tasks, name, role) {
++  // Optional 4th argument: an IST day. When given, tasks that are not due on
++  // that day (weekly / monthly) are left out.
++  function tasksForUser(tasks, name, role, day) {
+     var n = lower(name), r = lower(role);
+     return tasks.filter(function (t) {
+       if (!t.active) return false;
++      if (day && !isDueOn(t, day)) return false;
+       var a = t.assignedTo || ['all'];
+       if (a.indexOf('all') !== -1 || a.indexOf('') !== -1) return true;
+       return a.indexOf(n) !== -1 || (r && a.indexOf(r) !== -1);
+@@ -780,6 +823,8 @@
+     computeDashboard: computeDashboard,
+     listPhotos: listPhotos,
+     cleanPhotoTime: cleanPhotoTime,
++    normFrequency: normFrequency,
++    isDueOn: isDueOn,
+     tasksForUser: tasksForUser,
+     latestForDay: latestForDay,
+     sectionsFor: sectionsFor,
+diff -ruN -x '*.patch' base/docs/API.md mps-silks-store-checklist/docs/API.md
+--- a/docs/API.md	2026-10-22 12:14:48.063028623 +0000
++++ b/docs/API.md	2026-10-22 12:15:20.895450808 +0000
+@@ -157,11 +157,12 @@
+ assigned*; failed ≠ passed; today = `Pending`, past days = `Missed`.
+ 
+ ### `getTasks` → GET
+-`{ ok, tasks: [ { taskId, section, taskName, type, mandatory, photoRequired, active, assignedTo } ], problems: [] }`
++`{ ok, tasks: [ { taskId, section, taskName, type, mandatory, photoRequired, active, assignedTo, frequency } ], problems: [] }`
++`frequency` is `daily | weekly | monthly`. Weekly tasks are due every Friday and monthly tasks on the 28th (IST); a blank or unknown value means daily.
+ (all tasks incl. inactive, plus sheet-mapping problems).
+ 
+ ### `addTask` → POST
+-`{ section, taskName, type, mandatory, photoRequired, active, assignedTo? }`
++`{ section, taskName, type, mandatory, photoRequired, active, assignedTo?, frequency? }`
+ → `{ ok, message, taskId: "T035" }` (IDs auto-numbered `T###`).
+ `type` ∈ `yesno | rating | photo | text`; flags accept `Yes/No`-style values.
+ 
+diff -ruN -x '*.patch' base/docs/ARCHITECTURE.md mps-silks-store-checklist/docs/ARCHITECTURE.md
+--- a/docs/ARCHITECTURE.md	2026-10-22 12:14:48.063264639 +0000
++++ b/docs/ARCHITECTURE.md	2026-10-22 12:15:20.895816649 +0000
+@@ -98,7 +98,7 @@
+ 
+ | Sheet | Purpose | Required headers (aliases accepted) |
+ |---|---|---|
+-| `Checklist_Config` | tasks = source of truth | `Task_ID`, `Section`, `Task_Name`, `Type`, `Mandatory`, `Photo_Required`, `Active`, optional `Assigned_To` |
++| `Checklist_Config` | tasks = source of truth | `Task_ID`, `Section`, `Task_Name`, `Type`, `Mandatory`, `Photo_Required`, `Active`, optional `Assigned_To`, optional `Frequency` (`Daily` / `Weekly` = Fridays / `Monthly` = the 28th; blank = Daily) |
+ | `Users` | staff accounts | `Name`, `PIN`, `Role`, `Active` |
+ | `Submissions` | append-only audit log | `Timestamp`, `Date`, `Staff_Name`, `Role`, `Section`, `Task_ID`, `Task_Name`, `Type`, `Response`, `Photo_URL`, `Status`, `Remarks`, `Sequence`, `Override_Reason`, `Submission_ID`, `Photo_Time` (when the photo was taken; added automatically) |
+ | `Settings` | key/value store | `Key`, `Value` (uses `Store_Name`, `Store_Location`, …) |
+diff -ruN -x '*.patch' base/tests/core.test.js mps-silks-store-checklist/tests/core.test.js
+--- a/tests/core.test.js	2026-10-22 12:14:48.064953517 +0000
++++ b/tests/core.test.js	2026-10-22 12:15:08.630325792 +0000
+@@ -468,3 +468,88 @@
+   assert.strictEqual(C.cleanText('abcdef', 3), 'abc');
+   assert.strictEqual(C.cleanText(null), '');
+ });
++
++// ── task frequency: daily / weekly (Friday) / monthly (28th) ───
++const FREQ_HEADERS = ['Task_ID', 'Section', 'Task_Name', 'Type', 'Mandatory', 'Photo_Required', 'Active', 'Frequency'];
++function freqTasks() {
++  return C.normalizeTasks(FREQ_HEADERS, [
++    ['T001', 'Opening', 'Open shutters', 'yesno', 'Yes', 'No', 'Yes', 'Daily'],
++    ['T002', 'Opening', 'Weekly stock count', 'yesno', 'Yes', 'No', 'Yes', 'weekly'],
++    ['T003', 'Admin', 'Monthly audit', 'text', 'Yes', 'No', 'Yes', ' MONTHLY '],
++    ['T004', 'Admin', 'Blank means daily', 'yesno', 'Yes', 'No', 'Yes', ''],
++    ['T005', 'Admin', 'Typo frequency', 'yesno', 'Yes', 'No', 'Yes', 'fortnightly']
++  ]);
++}
++
++test('frequency: normFrequency accepts spellings; blank = daily; junk = null', () => {
++  assert.strictEqual(C.normFrequency('Daily'), 'daily');
++  assert.strictEqual(C.normFrequency(' WEEKLY '), 'weekly');
++  assert.strictEqual(C.normFrequency('Monthly'), 'monthly');
++  assert.strictEqual(C.normFrequency(''), 'daily');
++  assert.strictEqual(C.normFrequency(null), 'daily');
++  assert.strictEqual(C.normFrequency('fortnightly'), null);
++});
++
++test('frequency: the Frequency column is read and an unknown value is reported', () => {
++  const res = freqTasks();
++  const f = {}; res.tasks.forEach(t => { f[t.taskId] = t.frequency; });
++  assert.deepStrictEqual(f, { T001: 'daily', T002: 'weekly', T003: 'monthly', T004: 'daily', T005: 'daily' });
++  assert.ok(res.problems.some(p => /T005/.test(p.issue) && /Frequency/.test(p.issue)));
++  // a sheet without the column still works: everything is daily
++  const old = C.normalizeTasks(MPS_TASK_HEADERS, [['T1', 'S', 'A task', 'yesno', 'Yes', 'No', 'Yes']]);
++  assert.strictEqual(old.tasks[0].frequency, 'daily');
++  assert.strictEqual(old.problems.length, 0);
++});
++
++test('frequency: a header like "Task Frequency" or "Frequency (D/W/M)" is found', () => {
++  ['Task Frequency', 'Frequency (D/W/M)', 'frequency'].forEach(h => {
++    const col = C.mapColumns(['Task_ID', 'Section', 'Task_Name', h], 'task');
++    assert.strictEqual(col.frequency, 3, h);
++  });
++});
++
++test('frequency: isDueOn - weekly is Friday only, monthly is the 28th only', () => {
++  const w = { frequency: 'weekly' }, m = { frequency: 'monthly' }, d = { frequency: 'daily' };
++  // 2026-10-23 is a Friday
++  assert.strictEqual(C.isDueOn(w, '2026-10-23'), true);
++  assert.strictEqual(C.isDueOn(w, '2026-10-22'), false);
++  assert.strictEqual(C.isDueOn(w, '2026-10-24'), false);
++  assert.strictEqual(C.isDueOn(m, '2026-10-28'), true);
++  assert.strictEqual(C.isDueOn(m, '2026-10-27'), false);
++  assert.strictEqual(C.isDueOn(m, '2026-02-28'), true);   // every month has a 28th
++  assert.strictEqual(C.isDueOn(d, '2026-10-22'), true);
++  assert.strictEqual(C.isDueOn({}, '2026-10-22'), true);  // no frequency = daily
++  assert.strictEqual(C.isDueOn(w, 'not-a-date'), true);   // unreadable day: do not hide tasks
++});
++
++test('frequency: tasksForUser with a day hides tasks that are not due', () => {
++  const res = freqTasks();
++  const ids = day => C.tasksForUser(res.tasks, 'Abu', 'Staff', day).map(t => t.taskId);
++  assert.deepStrictEqual(ids('2026-10-22'), ['T001', 'T004', 'T005']);                 // Thursday
++  assert.deepStrictEqual(ids('2026-10-23'), ['T001', 'T002', 'T004', 'T005']);         // Friday
++  assert.deepStrictEqual(ids('2026-10-28'), ['T001', 'T003', 'T004', 'T005']);         // the 28th (Wednesday)
++  assert.strictEqual(C.tasksForUser(res.tasks, 'Abu', 'Staff').length, 5);             // no day = no filter
++});
++
++test('frequency: dashboard counts a weekly task as assigned only on its due day', () => {
++  const tasks = freqTasks().tasks;
++  const thu = C.computeDashboard(tasks, [], '2026-10-22', '2026-10-22', '2026-10-22');
++  assert.strictEqual(thu.headline.assigned, 3);                 // T001, T004, T005
++  const fri = C.computeDashboard(tasks, [], '2026-10-23', '2026-10-23', '2026-10-23');
++  assert.strictEqual(fri.headline.assigned, 4);                 // + weekly T002
++  assert.ok(fri.detail.some(r => r.taskId === 'T002' && r.frequency === 'weekly'));
++  assert.ok(!thu.detail.some(r => r.taskId === 'T002'));
++  // a range Thu..Fri sums the daily assigned counts: 3 + 4
++  const range = C.computeDashboard(tasks, [], '2026-10-22', '2026-10-23', '2026-10-23');
++  assert.strictEqual(range.range.assignedTotal, 7);
++  assert.deepStrictEqual(range.trend.map(t => t.assigned), [3, 4]);
++});
++
++test('frequency: an unsubmitted weekly task is Missed only on its own Friday', () => {
++  const tasks = freqTasks().tasks;
++  const subs = [{ date: '2026-10-23', taskId: 'T002', staffName: 'Abu', status: 'OK', response: 'yes', timestamp: '2026-10-23 10:00:00' }];
++  const fri = C.computeDashboard(tasks, subs, '2026-10-23', '2026-10-23', '2026-10-23');
++  assert.strictEqual(fri.headline.submitted, 1);
++  const sat = C.computeDashboard(tasks, [], '2026-10-24', '2026-10-24', '2026-10-24');
++  assert.strictEqual(sat.outstanding.filter(r => r.taskId === 'T002').length, 0);
++});
+diff -ruN -x '*.patch' base/tests/pages.test.js mps-silks-store-checklist/tests/pages.test.js
+--- a/tests/pages.test.js	2026-10-22 12:14:48.064927600 +0000
++++ b/tests/pages.test.js	2026-10-22 12:15:20.896201406 +0000
+@@ -458,3 +458,13 @@
+   assert.match(api, /c\.photoTime/, 'photo time is written to the sheet');
+   assert.match(admin, /Taken time not recorded/, 'admin gallery shows the capture time');
+ });
++
++test('task frequency: admin form, backend rules and submit guard are wired', () => {
++  const admin = read('admin.html');
++  const api = read('backend/MPS_BACKEND.gs');
++  assert.match(admin, /id="f-frequency"/, 'admin can set a task frequency');
++  assert.match(admin, /frequency: document\.getElementById\('f-frequency'\)\.value/, 'frequency is sent when saving a task');
++  assert.match(api, /tasksForUser\(res\.tasks, sess\.name, sess\.role, today\)/, 'staff checklist only lists tasks due today');
++  assert.match(api, /code: 'NOT_DUE'/, 'a task that is not due cannot be submitted');
++  assert.match(api, /ensureHeaders_\('Checklist_Config', \['Frequency'\]\)/, 'Frequency header is added when missing');
++});

@@ -1,0 +1,276 @@
+diff -ru -x node_modules -x dist orig_copy/backend/MPS_BACKEND.gs mps-silks-store-checklist/backend/MPS_BACKEND.gs
+--- orig_copy/backend/MPS_BACKEND.gs	2026-10-22 10:17:03.335386513 +0000
++++ mps-silks-store-checklist/backend/MPS_BACKEND.gs	2026-10-22 10:17:03.360690216 +0000
+@@ -883,9 +883,11 @@
+     try { meta = JSON.parse(file.getDescription() || '{}'); } catch (e2) {}
+     if (meta.staff !== sess.name) return { ok: false, error: 'Access denied.', code: 'FORBIDDEN' };
+   }
++  // ContentService cannot serve binary files, so return the photo as a base64 data URL in JSON.
+   var blob = file.getBlob();
+-  return ContentService.createTextOutput(blob.getBytes())
+-    .setMimeType(blob.getContentType() || 'image/jpeg');
++  var mime = String(blob.getContentType() || 'image/jpeg').toLowerCase();
++  if (mime.indexOf('image/') !== 0) return { ok: false, error: 'Not a photo.', code: 'VALIDATION' };
++  return { ok: true, dataUrl: 'data:' + mime + ';base64,' + Utilities.base64Encode(blob.getBytes()) };
+ }
+ 
+ // ── dashboard ──────────────────────────────────────────────────
+diff -ru -x node_modules -x dist orig_copy/checklist.html mps-silks-store-checklist/checklist.html
+--- orig_copy/checklist.html	2026-10-22 10:17:03.335407502 +0000
++++ mps-silks-store-checklist/checklist.html	2026-10-22 10:17:27.495011639 +0000
+@@ -190,11 +190,12 @@
+ var secs = [], ans = {}, must = [], tot = 0, today = '';
+ var openSecs = { pending: {}, completed: {} };
+ var pendingBatchId = null;   // idempotency key, kept across retries
++var pendingBatchKey = '';    // which tasks that key belongs to
+ var photoTarget = null;      // { taskId, isEdit }
+ 
+ document.getElementById('draftBtn').addEventListener('click', function () {
+   saveDraft(true);
+-  window.UI.toast('Draft saved on this device.', 'ok');
++  window.UI.toast('Draft saved on this device. Photos are not saved in drafts.', 'ok');
+ });
+ 
+ // ── load ──────────────────────────────────────────────────────
+@@ -231,7 +232,13 @@
+     if (draft) {
+       Object.keys(draft.answers || {}).forEach(function (tid) {
+         if (!ans[tid] || !ans[tid]._done) {
+-          ans[tid] = Object.assign(ans[tid] || {}, draft.answers[tid], { p: undefined });
++          var dt = findTask(tid);
++          var saved = Object.assign({}, draft.answers[tid]);
++          var needsPhoto = !!(dt && (dt.type === 'photo' || dt.photoRequired));
++          // Photos are never kept in drafts, so a photo-type task is not "answered" after restore.
++          if (dt && dt.type === 'photo') saved.v = '';
++          if (needsPhoto && (saved.v || saved.r)) saved._needPhoto = true;
++          ans[tid] = Object.assign(ans[tid] || {}, saved, { p: undefined });
+         }
+       });
+       markDraftSaved();
+@@ -239,6 +246,7 @@
+     document.getElementById('tbSub').textContent =
+       window.Dates.formatFull(today) + ' · ' + me.name;
+     build();
++    restoreServerPhotos();
+     loadEl.style.display = 'none';
+   });
+ }
+@@ -331,6 +339,7 @@
+   } else {
+     div.className = 'tc' + (a.v === 'no' || a._status === 'FAIL' ? ' fail' : (a.v ? ' ok' : ''));
+     div.innerHTML = '<div class="tc-lbl">' + window.UI.esc(t.taskName) + ' ' + mb + ' ' + pb + '</div>'
++      + (a._needPhoto && !a.p ? '<div style="font-size:11px;font-weight:700;color:var(--amber);margin-top:6px">&#128247; Your photo was not saved in the draft. Please take it again.</div>' : '')
+       + pendingControls(t)
+       + photoPreviewHtml(id, null, false);
+     restoreUI(div, t, a);
+@@ -357,7 +366,7 @@
+     html = '<textarea class="ti" data-txt="' + id + '" placeholder="Enter your response"></textarea>'
+       + photoButtons(id, false);
+   }
+-  if (t.photoRequired && t.type !== 'photo') html += photoButtons(id, false);
++  if (t.photoRequired && t.type !== 'photo' && t.type !== 'text') html += photoButtons(id, false);
+   return html;
+ }
+ 
+@@ -534,6 +543,7 @@
+     window.UI.compressImage(input.files[0], CFG.photo).then(function (dataUrl) {
+       var a = getAns(id);
+       a.p = dataUrl;
++      a._needPhoto = false;
+       a.photoId = isEdit ? a.photoId : '';   // edit keeps the stored id until a new upload succeeds
+       if (!isEdit) {
+         var t = findTask(id);
+@@ -621,7 +631,7 @@
+   entries.forEach(function (e) {
+     var t = findTask(e.taskId);
+     if (!t) return;
+-    if ((t.photoRequired || t.type === 'photo') && !e.photoRef && !e.photoIdExisting) {
++    if ((t.photoRequired || t.type === 'photo') && !e.photoData && !e.photoRef && !e.photoIdExisting) {
+       errs.push('"' + t.taskName + '": a photo is required.');
+     }
+     var answered = e.response || e.photoRef || e.photoIdExisting;
+@@ -661,9 +671,13 @@
+ 
+   // Keep one idempotency key for this batch until the server confirms —
+   // a retry after a timeout can never create duplicate records.
+-  if (!pendingBatchId) {
++  // A different set of tasks must never reuse an old batch id (the server would
++  // treat it as an already-saved duplicate and silently skip the new tasks).
++  var batchKey = entries.map(function (e) { return e.task.taskId; }).sort().join(',');
++  if (!pendingBatchId || pendingBatchKey !== batchKey) {
+     pendingBatchId = window.UI.uuid();
+-    persistPending(pendingBatchId, entries.map(function (e) { return e.task.taskId; }));
++    pendingBatchKey = batchKey;
++    persistPending(pendingBatchId, batchKey);
+   }
+ 
+   uploadPhotosThen(entries, 0, function () {
+@@ -727,6 +741,7 @@
+       delete a.p;
+     });
+     pendingBatchId = null;
++    pendingBatchKey = '';
+     clearPending();
+     clearDraft();
+     document.getElementById('doneMsg').textContent = me.name + ' — your checklist was saved.';
+@@ -736,8 +751,8 @@
+ }
+ 
+ // pending-submit persistence (safe retry after closing the page)
+-function persistPending(batchId, taskIds) {
+-  try { localStorage.setItem('mps_pending_' + me.name + '_' + today, JSON.stringify({ batchId: batchId, taskIds: taskIds })); } catch (e) {}
++function persistPending(batchId, batchKey) {
++  try { localStorage.setItem('mps_pending_' + me.name + '_' + today, JSON.stringify({ batchId: batchId, batchKey: batchKey })); } catch (e) {}
+ }
+ function clearPending() {
+   try { localStorage.removeItem('mps_pending_' + me.name + '_' + today); } catch (e) {}
+@@ -747,7 +762,7 @@
+     var raw = localStorage.getItem('mps_pending_' + me.name + '_' + window.Dates.today());
+     if (raw) {
+       var d = JSON.parse(raw);
+-      if (d && d.batchId) pendingBatchId = d.batchId; // safe: server treats a repeated batch as a duplicate
++      if (d && d.batchId && d.batchKey) { pendingBatchId = d.batchId; pendingBatchKey = d.batchKey; } // safe: server treats a repeated batch as a duplicate
+     }
+   } catch (e) {}
+ })();
+@@ -768,7 +783,7 @@
+   if (eTxt) response = eTxt.value.trim();
+ 
+   if (t.type !== 'photo' && !response) { window.UI.toast('Please choose a new response first.', 'err'); return; }
+-  if (t.photoRequired && !a.photoId && !a.p) { window.UI.toast('A photo is required for this task.', 'err'); return; }
++  if ((t.photoRequired || t.type === 'photo') && !a.photoId && !a.p) { window.UI.toast('A photo is required for this task.', 'err'); return; }
+   if (response === 'no' && !remarks) { window.UI.toast('A remark is required when a task fails.', 'err'); return; }
+ 
+   btn.disabled = true;
+diff -ru -x node_modules -x dist orig_copy/docs/API.md mps-silks-store-checklist/docs/API.md
+--- orig_copy/docs/API.md	2026-10-22 10:17:03.337170786 +0000
++++ mps-silks-store-checklist/docs/API.md	2026-10-22 10:17:26.526070451 +0000
+@@ -1,8 +1,8 @@
+ # API — MPS Silks Store Operations Checklist
+ 
+ Backend: Google Apps Script web app (deployed from `backend/MPS_BACKEND.gs` +
+-`backend/mps-core.gs`), returning **JSON** for every action except `getPhoto`
+-(returns image bytes).
++`backend/mps-core.gs`), returning **JSON** for every action (`getPhoto` returns the photo as a
++base64 `dataUrl`, because Apps Script cannot serve binary files).
+ 
+ ## Transport
+ 
+@@ -115,8 +115,8 @@
+ Failures: `VALIDATION`, `CONFIG`, `STORAGE`, `AUTH`.
+ 
+ ### `getPhoto` → GET
+-`?action=getPhoto&fileId=<photoId>` → **image bytes** with the original
+-content type (not JSON). Admins may fetch any photo; staff only files whose
++`?action=getPhoto&fileId=<photoId>` → JSON `{ ok, dataUrl }` where `dataUrl` is
++`data:image/...;base64,...` (Apps Script cannot return raw image bytes). Admins may fetch any photo; staff only files whose
+ description `staff` matches their own name; otherwise `FORBIDDEN` JSON.
+ No Drive URL is ever exposed.
+ 
+diff -ru -x node_modules -x dist orig_copy/js/api.js mps-silks-store-checklist/js/api.js
+--- orig_copy/js/api.js	2026-10-22 10:17:03.337575816 +0000
++++ mps-silks-store-checklist/js/api.js	2026-10-22 10:17:03.360278737 +0000
+@@ -2,7 +2,7 @@
+ //  MPS Silks — API client
+ //  GET  →  {endpoint}?action=…&token=…
+ //  POST →  {endpoint}  body: JSON text/plain (avoids CORS preflight)
+-//          with X-Token header + token field.
++//          with the session token inside the JSON body (no custom headers).
+ //  Handles session expiry centrally: any AUTH error clears the
+ //  session and returns the caller to the login screen.
+ // ════════════════════════════════════════════════════════════════
+@@ -78,12 +78,15 @@
+       var ep = endpoint();
+       if (ep.error) return Promise.reject(new Error(ep.error));
+       return fetch(ep.url + '?action=getPhoto&token=' + encodeURIComponent(sessionToken()) + '&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' })
+-        .then(function (r) {
+-          var ct = r.headers.get('content-type') || '';
+-          if (!r.ok || ct.indexOf('image') === -1) throw new Error('Photo unavailable.');
+-          return r.blob();
+-        })
+-        .then(function (blob) { return global.URL.createObjectURL(blob); });
++        .then(function (r) { return r.json(); })
++        .then(function (res) {
++          normalize(res);
++          // Apps Script cannot return raw image bytes, so the photo arrives as a base64 data URL.
++          if (!res || res.ok !== true || String(res.dataUrl || '').indexOf('data:image/') !== 0) {
++            throw new Error((res && res.error) || 'Photo unavailable.');
++          }
++          return res.dataUrl;
++        });
+     }
+   };
+ 
+diff -ru -x node_modules -x dist orig_copy/tests/pages.test.js mps-silks-store-checklist/tests/pages.test.js
+--- orig_copy/tests/pages.test.js	2026-10-22 10:17:03.337975691 +0000
++++ mps-silks-store-checklist/tests/pages.test.js	2026-10-22 10:17:16.640593286 +0000
+@@ -245,7 +245,7 @@
+   // Photo_Required is No, killing the WHOLE batch — so the client must
+   // refuse early, before the network round-trip:
+   assert.match(src,
+-    /\(t\.photoRequired \|\| t\.type === 'photo'\) && !e\.photoRef && !e\.photoIdExisting/,
++    /\(t\.photoRequired \|\| t\.type === 'photo'\) && !e\.photoData && !e\.photoRef && !e\.photoIdExisting/,
+     'validateNew must treat type=photo like photoRequired');
+   assert.match(src, /errs\.push\('"' \+ t\.taskName \+ '": a photo is required\.'\);/,
+     'the type=photo check must reuse the same "a photo is required" message');
+@@ -308,3 +308,60 @@
+   assert.match(src, /ep\.url \+ '\?action=getPhoto/,
+     'photoUrl must append "?action=getPhoto" directly');
+ });
++
++// ── staff checklist: photo / draft / batch fixes ──────────────────
++function loadValidateNew(tasks) {
++  const src = read('checklist.html');
++  const start = src.indexOf('function validateNew(entries)');
++  const end = src.indexOf('// ── submit', start);
++  assert.ok(start !== -1 && end !== -1, 'validateNew must exist');
++  const body = src.slice(start, end);
++  return new Function('findTask', body + '; return validateNew;')(
++    (id) => tasks.find((t) => t.taskId === id) || null);
++}
++
++test('behaviour: a freshly picked photo (not yet uploaded) passes validateNew', () => {
++  const tasks = [
++    { taskId: 'T1', taskName: 'Photo task', type: 'photo', photoRequired: true, mandatory: true },
++    { taskId: 'T2', taskName: 'Yes/no + photo', type: 'yesno', photoRequired: true, mandatory: false }
++  ];
++  const validateNew = loadValidateNew(tasks);
++  const fresh = 'data:image/jpeg;base64,xxx';
++  assert.deepStrictEqual(validateNew([
++    { taskId: 'T1', response: 'Photo', remarks: '', photoData: fresh, photoRef: '', photoIdExisting: '' },
++    { taskId: 'T2', response: 'yes', remarks: '', photoData: fresh, photoRef: '', photoIdExisting: '' }
++  ]), []);
++  const missing = validateNew([
++    { taskId: 'T1', response: '', remarks: '', photoData: '', photoRef: '', photoIdExisting: '' }
++  ]);
++  assert.ok(missing.some((m) => /a photo is required/.test(m)), 'no photo at all must still be refused');
++  assert.deepStrictEqual(validateNew([
++    { taskId: 'T1', response: 'Photo', remarks: '', photoData: '', photoRef: '', photoIdExisting: 'FILEID12345' }
++  ]), []);
++});
++
++test('regression: server photos are shown after the checklist loads', () => {
++  const src = read('checklist.html');
++  assert.match(src, /build\(\);\s*restoreServerPhotos\(\);\s*loadEl\.style\.display/,
++    'restoreServerPhotos() must run right after the first build()');
++});
++
++test('regression: a draft never restores a photo-type task as answered', () => {
++  const src = read('checklist.html');
++  assert.match(src, /dt\.type === 'photo'\) saved\.v = ''/, 'photo-type draft answer must be cleared on restore');
++  assert.match(src, /_needPhoto/, 'tasks needing a re-taken photo must be flagged');
++});
++
++test('regression: a changed task set gets a new idempotency batch id', () => {
++  const src = read('checklist.html');
++  assert.match(src, /pendingBatchKey !== batchKey/, 'batch id must be renewed when the tasks differ');
++});
++
++test('regression: getPhoto returns JSON data URL, client reads it', () => {
++  const api = read('js/api.js');
++  const be = read('backend/MPS_BACKEND.gs');
++  assert.match(api, /res\.dataUrl/, 'api.js photoUrl must read dataUrl from JSON');
++  assert.doesNotMatch(api, /X-Token/, 'api.js comment must not mention X-Token');
++  assert.match(be, /Utilities\.base64Encode\(blob\.getBytes\(\)\)/, 'backend must return base64');
++  assert.doesNotMatch(be, /createTextOutput\(blob\.getBytes\(\)\)/, 'backend must not send raw bytes via ContentService');
++});

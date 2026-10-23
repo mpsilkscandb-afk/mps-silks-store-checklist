@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Admin — MPS Silks Checklist</title>
+<meta name="theme-color" content="#7A1420"/>
+<link rel="icon" type="image/png" href="images/mps-logo.png"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="css/theme.css"/>
+<style>
+  .panel { display: none; padding: 16px; max-width: 980px; margin: 0 auto; padding-bottom: 60px; }
+  .panel.active { display: block; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 12px; gap: 10px; flex-wrap: wrap; }
+  .ph-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .ph-filter label { font-size: 12px; font-weight: 700; color: var(--ink-60); display: flex; align-items: center; gap: 6px; }
+  .ph-filter input[type=date] { padding: 7px 8px; border: 1.5px solid var(--border); border-radius: var(--r-sm); background: var(--paper); font-size: 13px; }
+  .ph-info { font-size: 12px; color: var(--ink-60); margin-bottom: 10px; }
+  .ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .ph-card { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); padding: 10px; }
+  .ph-card .ph-date { font-size: 11px; font-weight: 700; color: var(--maroon); }
+  .ph-card .ph-task { font-size: 13px; font-weight: 700; margin: 3px 0; }
+  .ph-card .ph-meta { font-size: 11px; color: var(--ink-60); margin-bottom: 8px; }
+  .ph-card .ph-view { width: 100%; min-height: 90px; display: flex; align-items: center; justify-content: center; background: var(--ivory); border-radius: var(--r-sm); font-size: 12px; font-weight: 700; color: var(--maroon); cursor: pointer; text-align: center; }
+  .ph-card .ph-view img { width: 100%; border-radius: var(--r-sm); display: block; }
+  .panel-head h2 { font-family: var(--font-head); font-size: 19px; color: var(--maroon); }
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .search-inp { flex: 1; min-width: 170px; padding: 9px 12px; border-radius: var(--r-sm); border: 1.5px solid var(--border-strong); font-size: 13px; background: var(--paper); }
+  .filter-sel { padding: 9px 10px; border-radius: var(--r-sm); border: 1.5px solid var(--border-strong); font-size: 12.5px; background: var(--paper); }
+  .tid { font-size: 10.5px; font-weight: 700; color: var(--ink-60); font-family: monospace; }
+  .inactive-row td { opacity: .45; }
+  .active-toggle { width: 38px; height: 21px; border-radius: 11px; cursor: pointer; position: relative; transition: background .2s; border: 0; }
+  .active-toggle.on { background: var(--green); }
+  .active-toggle.off { background: var(--ink-30); }
+  .active-toggle::after { content: ''; position: absolute; top: 2.5px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .2s; }
+  .active-toggle.on::after { left: 19px; }
+  .active-toggle.off::after { left: 3px; }
+  .user-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .user-card { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); padding: 14px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow); }
+  .u-avatar {
+    width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
+    background: var(--maroon); color: #FFF8E7; border: 1.5px solid var(--gold-dark);
+    font-size: 17px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  }
+  .u-info { flex: 1; min-width: 0; }
+  .u-name { font-size: 14px; font-weight: 700; }
+  .u-meta { font-size: 10.5px; margin-top: 3px; color: var(--ink-60); }
+  .u-actions { display: flex; flex-direction: column; gap: 5px; }
+  .setting-card { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); padding: 16px; box-shadow: var(--shadow); }
+  .setting-card h3 { font-size: 13.5px; font-weight: 700; color: var(--maroon); margin-bottom: 12px; }
+  .map-problems { background: var(--amber-l); border: 1.5px solid var(--amber); border-radius: var(--r-sm); padding: 10px 12px; font-size: 12px; color: var(--amber); margin-bottom: 12px; }
+  .map-problems li { margin-left: 16px; margin-top: 3px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="tb-left">
+    <div class="tb-logo-chip"><img src="images/mps-logo.png" alt="MPS Silks"/></div>
+    <div style="min-width:0">
+      <div class="tb-title">Admin Panel</div>
+      <div class="tb-sub" id="tbSub">—</div>
+    </div>
+  </div>
+  <div class="tb-right">
+    <button class="tb-btn" onclick="location.href='dashboard.html'">Dashboard</button>
+    <button class="tb-btn" id="btnLogout">Logout</button>
+  </div>
+</div>
+
+<div class="tabs" style="top:69px">
+  <button class="tab active" data-tabbtn="tasks">&#9776; Tasks</button>
+  <button class="tab" data-tabbtn="users">&#128100; Staff</button>
+  <button class="tab" data-tabbtn="photos">&#128247; Photos</button>
+  <button class="tab" data-tabbtn="settings">&#9881; Settings</button>
+</div>
+
+<div id="pg-load" class="loading-block"><div class="spinner"></div><div class="lbl">Loading admin data...</div></div>
+
+<!-- TASKS -->
+<div class="panel active" id="panel-tasks">
+  <div class="panel-head"><h2>Checklist Tasks</h2><button class="btn sm" onclick="openTaskDrawer()">&#43; Add Task</button></div>
+  <div id="mapProblems"></div>
+  <div class="filter-bar">
+    <input class="search-inp" id="taskSearch" placeholder="&#128269; Search tasks..." oninput="renderTasks()"/>
+    <select class="filter-sel" id="secFilter" onchange="renderTasks()"><option value="">All sections</option></select>
+    <select class="filter-sel" id="statusFilter" onchange="renderTasks()">
+      <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option>
+    </select>
+  </div>
+  <div class="table-wrap">
+    <table class="data" style="min-width:760px">
+      <thead><tr><th>ID</th><th>Section</th><th>Task</th><th>Type</th><th>Frequency</th><th>Flags</th><th>Assigned</th><th>Active</th><th>Actions</th></tr></thead>
+      <tbody id="taskBody"></tbody>
+    </table>
+  </div>
+  <div class="empty" id="taskEmpty" style="display:none">No tasks match the filter.</div>
+</div>
+
+<!-- USERS -->
+<div class="panel" id="panel-users">
+  <div class="panel-head"><h2>Staff Accounts</h2><button class="btn sm" onclick="openUserDrawer()">&#43; Add Staff</button></div>
+  <p style="font-size:11.5px;color:var(--ink-60);margin-bottom:12px">PINs are stored securely on the server and are never displayed here. Use “Reset PIN” to set a new one.</p>
+  <div class="user-grid" id="userGrid"></div>
+  <div class="empty" id="userEmpty" style="display:none">No staff accounts yet.</div>
+</div>
+
+<!-- PHOTOS -->
+<div class="panel" id="panel-photos">
+  <div class="panel-head"><h2>Uploaded Photos</h2></div>
+  <div class="ph-filter">
+    <label>From <input type="date" id="phFrom"/></label>
+    <label>To <input type="date" id="phTo"/></label>
+    <button class="btn sm" id="phShow">Show</button>
+    <button class="btn sm ghost" data-phq="0">Today</button>
+    <button class="btn sm ghost" data-phq="6">Last 7 days</button>
+    <button class="btn sm ghost" data-phq="29">Last 30 days</button>
+  </div>
+  <div id="phInfo" class="ph-info"></div>
+  <div id="phGrid" class="ph-grid"></div>
+</div>
+
+<!-- SETTINGS -->
+<div class="panel" id="panel-settings">
+  <div class="panel-head"><h2>Settings</h2></div>
+  <div class="setting-card" style="max-width:520px">
+    <h3>&#127981; Store information</h3>
+    <div class="field"><label>Store name</label><input id="s-storeName" type="text"/></div>
+    <div class="field"><label>Location</label><input id="s-storeLocation" type="text"/></div>
+    <div class="grid-2">
+      <div class="field"><label>Opening time</label><input id="s-openingTime" type="time"/></div>
+      <div class="field"><label>Closing time</label><input id="s-closingTime" type="time"/></div>
+    </div>
+    <button class="btn" onclick="saveSettings()">&#10003; Save Settings</button>
+  </div>
+</div>
+
+<!-- TASK DRAWER -->
+<div class="overlay" id="taskOverlay" onclick="closeTaskDrawer()"></div>
+<div class="drawer" id="taskDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-title" id="taskDrawerTitle">Add Task</div>
+  <input type="hidden" id="editTaskId"/>
+  <div class="field"><label>Section</label>
+    <select id="f-section" onchange="checkNewSec()"></select>
+  </div>
+  <div class="field" id="newSecRow" style="display:none"><label>New section name</label><input id="f-newSection" type="text" placeholder="e.g. Evening Checks"/></div>
+  <div class="field"><label>Task name</label><input id="f-taskName" type="text" placeholder="Describe the task..."/></div>
+  <div class="grid-2">
+    <div class="field"><label>Type</label>
+      <select id="f-type"><option value="yesno">Yes / No</option><option value="rating">Rating (1–5)</option><option value="photo">Photo</option><option value="text">Text</option></select>
+    </div>
+    <div class="field"><label>Mandatory</label><select id="f-mandatory"><option value="Yes">Yes</option><option value="No">No</option></select></div>
+  </div>
+  <div class="grid-2">
+    <div class="field"><label>Photo required</label><select id="f-photo"><option value="No">No</option><option value="Yes">Yes</option></select></div>
+    <div class="field"><label>Active</label><select id="f-active"><option value="Yes">Yes</option><option value="No">No</option></select></div>
+  </div>
+  <div class="field"><label>Frequency</label>
+    <select id="f-frequency"><option value="Daily">Daily</option><option value="Weekly">Weekly (every Friday)</option><option value="Monthly">Monthly (the 28th)</option></select>
+  </div>
+  <div class="field"><label>Assigned to (optional)</label>
+    <input id="f-assignedTo" type="text" placeholder="Leave empty for: everyone"/>
+    <span class="hint">Comma-separated staff names or roles. Empty = visible to all staff.</span>
+  </div>
+  <div class="drawer-btns">
+    <button class="btn ghost" onclick="closeTaskDrawer()">Cancel</button>
+    <button class="btn" onclick="saveTask()">&#10003; Save Task</button>
+  </div>
+</div>
+
+<!-- USER DRAWER -->
+<div class="overlay" id="userOverlay" onclick="closeUserDrawer()"></div>
+<div class="drawer" id="userDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-title" id="userDrawerTitle">Add Staff</div>
+  <input type="hidden" id="editUserName"/>
+  <div class="field"><label>Full name</label><input id="u-name" type="text" placeholder="e.g. Ramesh Kumar"/></div>
+  <div class="field"><label id="u-pinLabel">PIN (4 digits)</label><input id="u-pin" type="password" inputmode="numeric" maxlength="4" placeholder="Enter PIN"/></div>
+  <div class="grid-2">
+    <div class="field"><label>Role</label>
+      <select id="u-role"><option value="Staff">Staff</option><option value="Admin">Admin</option></select>
+    </div>
+    <div class="field"><label>Status</label><select id="u-active"><option value="Yes">Active</option><option value="No">Inactive</option></select></div>
+  </div>
+  <div class="drawer-btns">
+    <button class="btn ghost" onclick="closeUserDrawer()">Cancel</button>
+    <button class="btn" onclick="saveUser()">&#10003; Save</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="photoModal" onclick="closePhotoModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3>Photo</h3>
+    <div style="text-align:center"><img id="photoModalImg" alt="Photo"/></div>
+    <div class="modal-btns"><button class="btn ghost" onclick="closePhotoModal()">Close</button></div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api.js"></script>
+<script src="js/dates.js"></script>
+<script src="js/ui.js"></script>
+<script>
+(function () {
+'use strict';
+
+var me = window.Auth.require({ admin: true });
+if (!me) return;
+window.UI.bindLogout('btnLogout');
+window.UI.fillIdentity('tbSub', me);
+
+var allTasks = [], allUsers = [], settings = {};
+
+// ── tabs ──────────────────────────────────────────────────────
+document.querySelectorAll('[data-tabbtn]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var tab = b.getAttribute('data-tabbtn');
+    document.querySelectorAll('[data-tabbtn]').forEach(function (x) { x.classList.toggle('active', x === b); });
+    ['tasks', 'users', 'photos', 'settings'].forEach(function (t) {
+      document.getElementById('panel-' + t).classList.toggle('active', t === tab);
+    });
+  });
+});
+
+// ── photos gallery (all days, not just today) ─────────────────
+var phLoaded = false;
+function phSetRange(daysBack) {
+  var today = window.Dates.today();
+  document.getElementById('phTo').value = today;
+  document.getElementById('phFrom').value = window.Dates.addDays(today, -daysBack);
+}
+function loadPhotos() {
+  var from = document.getElementById('phFrom').value;
+  var to = document.getElementById('phTo').value;
+  var info = document.getElementById('phInfo');
+  var grid = document.getElementById('phGrid');
+  info.textContent = 'Loading photos...';
+  grid.innerHTML = '';
+  window.MPS_API.get('getPhotos', { dateFrom: from, dateTo: to }).then(function (r) {
+    if (!r.ok) { info.textContent = r.error || 'Could not load photos.'; return; }
+    phLoaded = true;
+    info.textContent = r.total + ' photo' + (r.total === 1 ? '' : 's') + ' from ' + r.dateFrom + ' to ' + r.dateTo
+      + (r.truncated ? ' (showing the newest ' + r.photos.length + ' — narrow the dates to see the rest)' : '')
+      + '. Tap a photo box to load it.';
+    if (!r.photos.length) { grid.innerHTML = '<div class="empty">No photos in this date range.</div>'; return; }
+    r.photos.forEach(function (ph) {
+      var card = document.createElement('div');
+      card.className = 'ph-card';
+      var taken = ph.photoTime
+        ? '&#128247; Taken ' + window.UI.esc(ph.photoTime.slice(0, 10)) + ' ' + window.UI.esc(ph.photoTime.slice(11, 19))
+        : '&#128247; Taken time not recorded';
+      card.innerHTML = '<div class="ph-date">' + taken + '</div>'
+        + (ph.photoCount > 1 ? '<div class="ph-meta">Photo ' + window.UI.esc(ph.photoIndex) + ' of ' + window.UI.esc(ph.photoCount) + '</div>' : '')
+        + '<div class="ph-meta">Submitted ' + window.UI.esc(ph.date) + ' ' + window.UI.esc(String(ph.timestamp).slice(11, 19)) + '</div>'
+        + '<div class="ph-task">' + window.UI.esc(ph.taskName || ph.taskId) + '</div>'
+        + '<div class="ph-meta">' + window.UI.esc(ph.staffName) + (ph.section ? ' · ' + window.UI.esc(ph.section) : '')
+        + (ph.status ? ' · ' + window.UI.esc(ph.status) : '') + '</div>'
+        + '<div class="ph-view" data-file="' + window.UI.esc(ph.photoRef) + '">&#128247; Tap to load photo</div>';
+      grid.appendChild(card);
+    });
+  });
+}
+document.getElementById('phShow').addEventListener('click', loadPhotos);
+document.querySelectorAll('[data-phq]').forEach(function (b) {
+  b.addEventListener('click', function () { phSetRange(+b.getAttribute('data-phq')); loadPhotos(); });
+});
+document.getElementById('phGrid').addEventListener('click', function (e) {
+  var box = e.target.closest('.ph-view');
+  if (!box || box.getAttribute('data-busy')) return;
+  var img = box.querySelector('img');
+  if (img) { window.openPhoto(img.src); return; }       // already loaded → enlarge
+  box.setAttribute('data-busy', '1');
+  box.textContent = 'Loading...';
+  window.MPS_API.photoUrl(box.getAttribute('data-file')).then(function (url) {
+    box.innerHTML = '<img alt="Task photo"/>';
+    box.querySelector('img').src = url;
+    box.removeAttribute('data-busy');
+  }).catch(function (err) {
+    box.textContent = (err && err.message) || 'Photo unavailable. Tap to retry.';
+    box.removeAttribute('data-busy');
+  });
+});
+window.openPhoto = function (src) {
+  document.getElementById('photoModalImg').src = src;
+  document.getElementById('photoModal').classList.add('open');
+};
+window.closePhotoModal = function () { document.getElementById('photoModal').classList.remove('open'); };
+document.querySelector('[data-tabbtn="photos"]').addEventListener('click', function () {
+  if (!phLoaded) { phSetRange(6); loadPhotos(); }
+});
+
+// ── load ──────────────────────────────────────────────────────
+function loadAll() {
+  var loadEl = document.getElementById('pg-load');
+  loadEl.style.display = 'flex';
+  Promise.all([
+    window.MPS_API.get('getTasks', {}),
+    window.MPS_API.get('getUsers', {}),
+    window.MPS_API.get('getSettings', {})
+  ]).then(function (rs) {
+    loadEl.style.display = 'none';
+    var rt = rs[0], ru = rs[1], rs3 = rs[2];
+    if (!rt.ok) { window.UI.toast(rt.error || 'Failed to load tasks', 'err'); return; }
+    allTasks = rt.tasks || [];
+    renderMapProblems(rt.problems || []);
+    populateSectionFilters();
+    renderTasks();
+    if (ru.ok) { allUsers = ru.users || []; renderUsers(); }
+    else window.UI.toast(ru.error || 'Failed to load staff', 'err');
+    if (rs3.ok) { settings = rs3.settings || {}; populateSettings(); }
+  });
+}
+loadAll();
+
+function renderMapProblems(problems) {
+  var el = document.getElementById('mapProblems');
+  if (!problems.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="map-problems"><strong>&#9888; ' + problems.length + ' checklist mapping issue(s) found in the Google Sheet:</strong><ul>'
+    + problems.slice(0, 8).map(function (p) { return '<li>Row ' + p.row + ': ' + window.UI.esc(p.issue) + '</li>'; }).join('')
+    + '</ul>' + (problems.length > 8 ? '<div>…and ' + (problems.length - 8) + ' more.</div>' : '')
+    + '<div style="margin-top:6px">Fix these directly in the checklist sheet — they are never silently discarded.</div></div>';
+}
+
+// ── tasks ─────────────────────────────────────────────────────
+function populateSectionFilters() {
+  var secs = [];
+  allTasks.forEach(function (t) { if (secs.indexOf(t.section) === -1) secs.push(t.section); });
+  var sf = document.getElementById('secFilter');
+  sf.innerHTML = '<option value="">All sections</option>' + secs.map(function (s) {
+    return '<option value="' + window.UI.esc(s) + '">' + window.UI.esc(s) + '</option>';
+  }).join('');
+  var fd = document.getElementById('f-section');
+  fd.innerHTML = '<option value="">— Select —</option>' + secs.map(function (s) {
+    return '<option value="' + window.UI.esc(s) + '">' + window.UI.esc(s) + '</option>';
+  }).join('') + '<option value="__new__">+ New section…</option>';
+}
+
+window.renderTasks = renderTasks;
+function renderTasks() {
+  var q = (document.getElementById('taskSearch').value || '').toLowerCase();
+  var sf = document.getElementById('secFilter').value;
+  var stf = document.getElementById('statusFilter').value;
+  var filtered = allTasks.filter(function (t) {
+    if (sf && t.section !== sf) return false;
+    if (stf === 'active' && !t.active) return false;
+    if (stf === 'inactive' && t.active) return false;
+    if (q && (t.taskId + ' ' + t.taskName + ' ' + t.section).toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+  var body = document.getElementById('taskBody');
+  body.innerHTML = '';
+  document.getElementById('taskEmpty').style.display = filtered.length ? 'none' : 'block';
+  filtered.forEach(function (t) {
+    var tr = document.createElement('tr');
+    tr.className = t.active ? '' : 'inactive-row';
+    var flags = (t.mandatory ? '<span class="badge maroon">M</span> ' : '')
+      + (t.photoRequired ? '<span class="badge gold">&#128247;</span>' : '');
+    var freqLabel = t.frequency === 'weekly' ? 'Weekly' : (t.frequency === 'monthly' ? 'Monthly' : 'Daily');
+    var assigned = (t.assignedTo && t.assignedTo.length && t.assignedTo[0] !== 'all')
+      ? window.UI.esc(t.assignedTo.join(', ')) : '<span style="color:var(--ink-60)">Everyone</span>';
+    tr.innerHTML = '<td><span class="tid">' + window.UI.esc(t.taskId) + '</span></td>'
+      + '<td style="white-space:nowrap">' + window.UI.esc(t.section) + '</td>'
+      + '<td style="max-width:280px">' + window.UI.esc(t.taskName) + '</td>'
+      + '<td><span class="badge">' + window.UI.esc(t.type) + '</span></td>'
+      + '<td style="white-space:nowrap">' + freqLabel + '</td>'
+      + '<td style="white-space:nowrap">' + (flags || '—') + '</td>'
+      + '<td style="font-size:11.5px;white-space:nowrap">' + assigned + '</td>'
+      + '<td><button class="active-toggle ' + (t.active ? 'on' : 'off') + '" data-toggle="' + window.UI.esc(t.taskId) + '" title="Toggle active"></button></td>'
+      + '<td style="white-space:nowrap"><button class="btn sm ghost" data-edit-task="' + window.UI.esc(t.taskId) + '">Edit</button> '
+      + '<button class="btn sm ghost" style="color:var(--red)" data-del-task="' + window.UI.esc(t.taskId) + '">Delete</button></td>';
+    body.appendChild(tr);
+  });
+}
+document.getElementById('taskBody').addEventListener('click', function (e) {
+  var tog = e.target.closest('[data-toggle]');
+  if (tog) { toggleTask(tog.getAttribute('data-toggle')); return; }
+  var ed = e.target.closest('[data-edit-task]');
+  if (ed) { openTaskDrawer(ed.getAttribute('data-edit-task')); return; }
+  var del = e.target.closest('[data-del-task]');
+  if (del) { deleteTask(del.getAttribute('data-del-task')); return; }
+});
+
+window.openTaskDrawer = function (taskId) {
+  document.getElementById('editTaskId').value = taskId || '';
+  if (taskId) {
+    var t = allTasks.find(function (x) { return x.taskId === taskId; });
+    if (!t) return;
+    document.getElementById('taskDrawerTitle').textContent = 'Edit Task — ' + taskId;
+    setVal('f-section', t.section);
+    setVal('f-taskName', t.taskName);
+    setVal('f-type', t.type);
+    setVal('f-mandatory', t.mandatory ? 'Yes' : 'No');
+    setVal('f-photo', t.photoRequired ? 'Yes' : 'No');
+    setVal('f-active', t.active ? 'Yes' : 'No');
+    setVal('f-frequency', t.frequency === 'weekly' ? 'Weekly' : (t.frequency === 'monthly' ? 'Monthly' : 'Daily'));
+    setVal('f-assignedTo', (t.assignedTo && t.assignedTo[0] !== 'all') ? t.assignedTo.join(', ') : '');
+  } else {
+    document.getElementById('taskDrawerTitle').textContent = 'Add New Task';
+    ['f-taskName', 'f-newSection'].forEach(function (id) { document.getElementById(id).value = ''; });
+    setVal('f-section', ''); setVal('f-type', 'yesno'); setVal('f-mandatory', 'Yes');
+    setVal('f-photo', 'No'); setVal('f-active', 'Yes'); setVal('f-frequency', 'Daily'); setVal('f-assignedTo', '');
+  }
+  document.getElementById('newSecRow').style.display = 'none';
+  document.getElementById('taskOverlay').classList.add('open');
+  document.getElementById('taskDrawer').classList.add('open');
+};
+window.closeTaskDrawer = function () {
+  document.getElementById('taskOverlay').classList.remove('open');
+  document.getElementById('taskDrawer').classList.remove('open');
+};
+window.checkNewSec = function () {
+  document.getElementById('newSecRow').style.display =
+    document.getElementById('f-section').value === '__new__' ? 'flex' : 'none';
+};
+
+window.saveTask = function () {
+  var taskId = document.getElementById('editTaskId').value;
+  var secVal = document.getElementById('f-section').value;
+  var section = secVal === '__new__' ? document.getElementById('f-newSection').value.trim() : secVal;
+  var taskName = document.getElementById('f-taskName').value.trim();
+  if (!section || !taskName) { window.UI.toast('Section and task name are required.', 'err'); return; }
+  var payload = {
+    section: section, taskName: taskName,
+    type: document.getElementById('f-type').value,
+    mandatory: document.getElementById('f-mandatory').value,
+    photoRequired: document.getElementById('f-photo').value,
+    active: document.getElementById('f-active').value,
+    frequency: document.getElementById('f-frequency').value,
+    assignedTo: document.getElementById('f-assignedTo').value.trim()
+  };
+  payload.action = taskId ? 'updateTask' : 'addTask';
+  if (taskId) payload.taskId = taskId;
+  closeTaskDrawer();
+  window.MPS_API.post(payload.action, payload).then(function (r) {
+    if (r.ok) { window.UI.toast(taskId ? 'Task updated.' : 'Task added.', 'ok'); loadAll(); }
+    else window.UI.toast(r.error || 'Failed to save the task.', 'err');
+  });
+};
+
+function toggleTask(taskId) {
+  if (!confirm('Toggle the active status of task ' + taskId + '?')) return;
+  window.MPS_API.post('toggleTask', { taskId: taskId }).then(function (r) {
+    if (r.ok) { window.UI.toast('Task ' + (r.active === 'Yes' ? 'activated' : 'deactivated') + '.'); loadAll(); }
+    else window.UI.toast(r.error || 'Failed.', 'err');
+  });
+}
+function deleteTask(taskId) {
+  if (!confirm('Delete task ' + taskId + '?\n\nTasks with submission history cannot be deleted — deactivate them instead.')) return;
+  window.MPS_API.post('deleteTask', { taskId: taskId }).then(function (r) {
+    if (r.ok) { window.UI.toast('Task deleted.', 'ok'); loadAll(); }
+    else window.UI.toast(r.error || 'Cannot delete this task.', 'err');
+  });
+}
+
+// ── users ─────────────────────────────────────────────────────
+function renderUsers() {
+  var grid = document.getElementById('userGrid');
+  grid.innerHTML = '';
+  document.getElementById('userEmpty').style.display = allUsers.length ? 'none' : 'block';
+  allUsers.forEach(function (u) {
+    var card = document.createElement('div');
+    card.className = 'user-card';
+    card.innerHTML = '<div class="u-avatar">' + window.UI.esc((u.name || '?').slice(0, 1).toUpperCase()) + '</div>'
+      + '<div class="u-info"><div class="u-name">' + window.UI.esc(u.name) + '</div>'
+      + '<div class="u-meta">' + window.UI.esc(u.role || 'Staff') + ' · '
+      + (u.active ? '<span style="color:var(--green)">&#9679; Active</span>' : '<span style="color:var(--red)">&#9679; Inactive</span>')
+      + (u.pinSet ? '' : ' · <span style="color:var(--amber)">no PIN set</span>') + '</div></div>'
+      + '<div class="u-actions">'
+      + '<button class="btn sm ghost" data-edit-user="' + window.UI.esc(u.name) + '">Edit</button>'
+      + '<button class="btn sm ghost" data-pin-user="' + window.UI.esc(u.name) + '">Reset PIN</button>'
+      + '</div>';
+    grid.appendChild(card);
+  });
+}
+document.getElementById('userGrid').addEventListener('click', function (e) {
+  var ed = e.target.closest('[data-edit-user]');
+  if (ed) { openUserDrawer(ed.getAttribute('data-edit-user'), false); return; }
+  var pin = e.target.closest('[data-pin-user]');
+  if (pin) { openUserDrawer(pin.getAttribute('data-pin-user'), true); return; }
+});
+
+window.openUserDrawer = function (userName, pinOnly) {
+  document.getElementById('editUserName').value = userName || '';
+  var u = userName ? allUsers.find(function (x) { return x.name === userName; }) : null;
+  if (!u) return;
+  document.getElementById('userDrawerTitle').textContent = pinOnly ? 'Reset PIN — ' + u.name : 'Edit — ' + u.name;
+  setVal('u-name', u.name);
+  document.getElementById('u-name').disabled = true;
+  document.getElementById('u-pin').value = '';
+  document.getElementById('u-pinLabel').textContent = 'PIN (4 digits)';
+  setVal('u-role', u.role === 'Admin' ? 'Admin' : 'Staff');
+  setVal('u-active', u.active ? 'Yes' : 'No');
+  document.getElementById('userOverlay').classList.add('open');
+  document.getElementById('userDrawer').classList.add('open');
+};
+var _origOpenUser = window.openUserDrawer;
+window.openUserDrawerAdd = function () {
+  document.getElementById('editUserName').value = '';
+  document.getElementById('userDrawerTitle').textContent = 'Add Staff';
+  var n = document.getElementById('u-name');
+  n.disabled = false; n.value = '';
+  document.getElementById('u-pin').value = '';
+  document.getElementById('u-pinLabel').textContent = 'PIN (4 digits)';
+  setVal('u-role', 'Staff'); setVal('u-active', 'Yes');
+  document.getElementById('userOverlay').classList.add('open');
+  document.getElementById('userDrawer').classList.add('open');
+};
+// the "+ Add Staff" button calls openUserDrawer() with no args
+window.openUserDrawer = function (userName, pinOnly) {
+  if (!userName) return window.openUserDrawerAdd();
+  return _origOpenUser(userName, pinOnly);
+};
+
+window.closeUserDrawer = function () {
+  document.getElementById('userOverlay').classList.remove('open');
+  document.getElementById('userDrawer').classList.remove('open');
+};
+
+window.saveUser = function () {
+  var isEdit = !!document.getElementById('editUserName').value;
+  var name = document.getElementById('u-name').value.trim();
+  var pin = document.getElementById('u-pin').value.trim();
+  var role = document.getElementById('u-role').value;
+  var active = document.getElementById('u-active').value;
+  if (!isEdit && !name) { window.UI.toast('Name is required.', 'err'); return; }
+  if (isEdit && pin && !/^\d{4}$/.test(pin)) { window.UI.toast('PIN must be 4 digits.', 'err'); return; }
+  if (!isEdit && !/^\d{4}$/.test(pin)) { window.UI.toast('PIN must be 4 digits.', 'err'); return; }
+  var action, payload;
+  if (isEdit) {
+    action = 'updateUser';
+    payload = { name: name, role: role, active: active };
+    if (pin) payload.newPin = pin;
+  } else {
+    action = 'addUser';
+    payload = { name: name, pin: pin, role: role, active: active };
+  }
+  closeUserDrawer();
+  window.MPS_API.post(action, payload).then(function (r) {
+    if (r.ok) { window.UI.toast(isEdit ? 'Staff member updated.' : 'Staff member added.', 'ok'); loadAll(); }
+    else window.UI.toast(r.error || 'Failed to save.', 'err');
+  });
+};
+
+// ── settings ──────────────────────────────────────────────────
+function populateSettings() {
+  var map = {
+    Store_Name: 's-storeName',
+    Store_Location: 's-storeLocation',
+    Opening_Time: 's-openingTime',
+    Closing_Time: 's-closingTime'
+  };
+  Object.keys(map).forEach(function (k) {
+    var el = document.getElementById(map[k]);
+    if (el && settings[k]) el.value = String(settings[k]).slice(0, 8);
+  });
+}
+window.saveSettings = function () {
+  var s = {
+    Store_Name: document.getElementById('s-storeName').value.trim(),
+    Store_Location: document.getElementById('s-storeLocation').value.trim(),
+    Opening_Time: document.getElementById('s-openingTime').value,
+    Closing_Time: document.getElementById('s-closingTime').value
+  };
+  window.MPS_API.post('updateSettings', { settings: s }).then(function (r) {
+    if (r.ok) window.UI.toast('Settings saved.', 'ok');
+    else window.UI.toast(r.error || 'Failed to save settings.', 'err');
+  });
+};
+
+function setVal(id, val) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (el.tagName === 'SELECT') {
+    for (var i = 0; i < el.options.length; i++) {
+      if (el.options[i].value === String(val)) { el.selectedIndex = i; return; }
+    }
+    el.selectedIndex = 0;
+  } else el.value = val;
+}
+
+})();
+</script>
+</body>
+</html>

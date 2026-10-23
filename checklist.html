@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>My Checklist — MPS Silks</title>
+<meta name="theme-color" content="#7A1420"/>
+<link rel="icon" type="image/png" href="images/mps-logo.png"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="css/theme.css"/>
+<style>
+  /* page-specific */
+  .prog-wrap { background: var(--paper); padding: 10px 16px 12px; border-bottom: 1px solid var(--border); position: sticky; top: 69px; z-index: 89; }
+  .prog-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .prog-lbl { font-size: 12px; font-weight: 700; }
+  .prog-n { font-size: 12px; color: var(--ink-60); }
+  .pbar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+  .pfill { height: 100%; border-radius: 3px; background: var(--gold); transition: width .3s; width: 0; }
+  .pfill.full { background: var(--green); }
+
+  .tab-panel { display: none; padding: 12px 14px 120px; max-width: 660px; margin: 0 auto; }
+  .tab-panel.active { display: block; }
+
+  .sec-acc { margin-bottom: 10px; background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); overflow: hidden; box-shadow: var(--shadow); }
+  .sec-acc.all-done { border-color: rgba(30, 107, 58, .35); }
+  .sec-hdr { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; cursor: pointer; user-select: none; }
+  .sec-hdr-l { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .sec-num {
+    width: 27px; height: 27px; border-radius: 7px; flex-shrink: 0;
+    background: var(--maroon); color: #FFF8E7;
+    font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--gold-dark);
+  }
+  .sec-acc.all-done .sec-num { background: var(--green); border-color: var(--green); }
+  .sec-title { font-family: var(--font-head); font-size: 15px; color: var(--maroon); }
+  .sec-hdr-r { display: flex; align-items: center; gap: 8px; }
+  .sec-chevron { font-size: 11px; color: var(--ink-30); transition: transform .2s; }
+  .sec-acc.open .sec-chevron { transform: rotate(180deg); }
+  .sec-body { display: none; padding: 0 10px 10px; }
+  .sec-acc.open .sec-body { display: block; }
+
+  .tc { background: var(--ivory); border: 1.5px solid var(--border); border-radius: var(--r-sm); padding: 12px; margin-top: 8px; }
+  .tc.ok { border-color: var(--gold); }
+  .tc.fail { border-color: var(--red); background: #FFF7F6; }
+  .tc.done-pass { border-color: var(--green); background: #F4FBF6; }
+  .tc.done-fail { border-color: var(--red); background: #FFF7F6; }
+  .tc-lbl { font-size: 13.5px; line-height: 1.45; display: flex; flex-wrap: wrap; gap: 5px; align-items: flex-start; }
+  .yno { display: flex; gap: 8px; margin-top: 10px; }
+  .yb {
+    flex: 1; padding: 11px 8px; border-radius: var(--r-sm);
+    font-size: 13px; font-weight: 700;
+    border: 1.5px solid var(--border-strong); background: var(--paper); color: var(--ink-60);
+    transition: all .12s;
+  }
+  .yb.y.on { background: var(--green-l); border-color: var(--green); color: var(--green); }
+  .yb.n.on { background: var(--red-l); border-color: var(--red); color: var(--red); }
+  .stars { display: flex; gap: 6px; margin-top: 10px; }
+  .star { font-size: 30px; cursor: pointer; color: var(--border-strong); line-height: 1; }
+  .star.on { color: var(--gold); }
+  .photo-opts { display: flex; gap: 8px; margin-top: 10px; }
+  .photo-opt {
+    flex: 1; padding: 10px 8px; border-radius: var(--r-sm);
+    font-size: 12px; font-weight: 700;
+    border: 1.5px solid var(--maroon); background: var(--maroon-l); color: var(--maroon);
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .ph-area { margin-top: 10px; }
+  .ph-req, .ph-more { font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+  .ph-req { color: var(--amber); }
+  .ph-more { color: var(--maroon); }
+  .ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+  .ph-item { border: 1.5px solid var(--border-strong); border-radius: var(--r-sm); overflow: hidden; background: var(--paper); }
+  .ph-item img { width: 100%; height: 92px; object-fit: cover; display: block; background: var(--ivory); }
+  .ph-time { font-size: 10px; text-align: center; color: var(--ink-60); padding: 3px 2px 0; }
+  .ph-rm { display: block; width: 100%; border: 0; border-top: 1px solid var(--border); background: var(--paper); color: var(--maroon); font-size: 11px; font-weight: 700; padding: 5px 0; cursor: pointer; }
+  .rm, .ti {
+    width: 100%; margin-top: 8px; padding: 9px 12px;
+    border-radius: var(--r-sm); border: 1.5px solid var(--border-strong);
+    font-size: 13px; background: var(--paper); resize: none; height: 52px; line-height: 1.4;
+  }
+  .urw { margin-top: 10px; padding: 10px; background: var(--amber-l); border: 1px solid var(--amber); border-radius: var(--r-sm); display: none; }
+  .urw.show { display: block; }
+  .urw label { font-size: 11px; font-weight: 700; color: var(--amber); display: block; margin-bottom: 6px; }
+  .urw textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1.5px solid var(--amber); font-size: 12.5px; background: var(--paper); resize: none; height: 50px; font-family: inherit; }
+  .save-edit { margin-top: 10px; width: 100%; }
+
+  .done-row { display: flex; align-items: flex-start; gap: 10px; }
+  .done-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .done-info { flex: 1; min-width: 0; }
+  .done-name { font-size: 13.5px; line-height: 1.4; }
+  .done-meta { font-size: 11px; color: var(--ink-60); margin-top: 3px; }
+  .done-expand { font-size: 11.5px; font-weight: 700; color: var(--maroon); margin-top: 8px; cursor: pointer; }
+  .edit-body { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .tc.edit-open .edit-body { display: block; }
+
+  .sub-wrap {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    padding: 10px 16px 14px;
+    background: var(--cream); border-top: 1.5px solid var(--border);
+    z-index: 80;
+  }
+  .vmsg { font-size: 11.5px; color: var(--amber); margin-bottom: 6px; padding: 6px 10px; background: var(--amber-l); border-radius: 6px; display: none; }
+  .sub-btns { display: flex; gap: 8px; max-width: 660px; margin: 0 auto; }
+  .draft-btn { padding: 13px 15px; border-radius: var(--r); background: var(--paper); color: var(--maroon); font-size: 13px; font-weight: 700; border: 1.5px solid var(--border-strong); white-space: nowrap; flex-shrink: 0; }
+  .draft-btn.saved { background: var(--green-l); color: var(--green); border-color: var(--green); }
+  .sub-btn { flex: 1; padding: 14px; border-radius: var(--r); background: var(--maroon); color: #FFF8E7; font-size: 15px; font-weight: 700; }
+  .sub-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  #pg-done { display: none; position: fixed; inset: 0; background: var(--cream); z-index: 400; align-items: center; justify-content: center; }
+  #pg-done.active { display: flex; }
+  .done-body { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 32px; gap: 10px; }
+  .done-body .ring {
+    width: 84px; height: 84px; border-radius: 50%;
+    background: var(--green-l); border: 3px solid var(--green);
+    display: flex; align-items: center; justify-content: center; font-size: 40px;
+  }
+  .done-body h2 { font-family: var(--font-head); font-size: 27px; color: var(--maroon); }
+  .done-body p { font-size: 14px; color: var(--ink-60); }
+</style>
+</head>
+<body>
+
+<div id="pg-load" class="loading-block" style="display:flex;position:fixed;inset:0;background:var(--cream);z-index:500">
+  <div class="spinner"></div>
+  <div class="lbl" id="loadLbl">Loading your tasks...</div>
+  <button class="btn ghost sm" id="retryLoad" style="display:none" onclick="loadChecklist()">Retry</button>
+</div>
+
+<div class="topbar">
+  <div class="tb-left">
+    <div class="tb-logo-chip"><img src="images/mps-logo.png" alt="MPS Silks"/></div>
+    <div style="min-width:0">
+      <div class="tb-title">My Checklist</div>
+      <div class="tb-sub" id="tbSub">—</div>
+    </div>
+  </div>
+  <div class="tb-right">
+    <button class="tb-btn" id="btnDash" style="display:none" onclick="location.href='dashboard.html'">Dashboard</button>
+    <button class="tb-btn gold" id="btnAdmin" style="display:none" onclick="location.href='admin.html'">Admin</button>
+    <button class="tb-btn" id="btnLogout">Logout</button>
+  </div>
+</div>
+
+<div class="prog-wrap">
+  <div class="prog-row"><span class="prog-lbl">Today's progress</span><span class="prog-n" id="pn">0 / 0</span></div>
+  <div class="pbar"><div class="pfill" id="pf"></div></div>
+</div>
+
+<div class="tabs" style="top:69px">
+  <button class="tab active" id="mtab-pending" onclick="switchTab('pending')">Pending <span class="tab-count has" id="mc-pending">0</span></button>
+  <button class="tab" id="mtab-completed" onclick="switchTab('completed')">Completed <span class="tab-count" id="mc-completed">0</span></button>
+</div>
+
+<div class="tab-panel active" id="panel-pending"><div id="pendingBody"></div></div>
+<div class="tab-panel" id="panel-completed"><div id="completedBody"></div></div>
+
+<div class="sub-wrap">
+  <div class="vmsg" id="vmsg"></div>
+  <div class="sub-btns">
+    <button class="draft-btn" id="draftBtn">&#128190; Draft saved</button>
+    <button class="sub-btn" id="subBtn" onclick="doSubmit()" disabled>Submit Checklist</button>
+  </div>
+</div>
+
+<div id="pg-done">
+  <div class="done-body">
+    <div class="ring">&#10003;</div>
+    <h2>Submitted!</h2>
+    <p id="doneMsg">Your checklist has been saved.</p>
+    <p id="doneTime" style="font-size:12px;color:var(--ink-30)"></p>
+    <button class="btn" style="margin-top:12px" onclick="location.reload()">Back to Checklist</button>
+  </div>
+</div>
+
+<input type="file" accept="image/*" capture="environment" id="globalCam" style="display:none"/>
+<input type="file" accept="image/*" id="globalGal" style="display:none"/>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api.js"></script>
+<script src="js/dates.js"></script>
+<script src="js/ui.js"></script>
+<script>
+(function () {
+'use strict';
+
+var me = window.Auth.require({});
+if (!me) return;
+window.UI.bindLogout('btnLogout');
+if (me.isAdmin) {
+  document.getElementById('btnDash').style.display = '';
+  document.getElementById('btnAdmin').style.display = '';
+}
+
+var CFG = window.MPS_CONFIG || {};
+var secs = [], ans = {}, must = [], tot = 0, today = '';
+var openSecs = { pending: {}, completed: {} };
+var pendingBatchId = null;   // idempotency key, kept across retries
+var pendingBatchKey = '';    // which tasks that key belongs to
+var photoTarget = null;      // { taskId, isEdit }
+
+document.getElementById('draftBtn').addEventListener('click', function () {
+  saveDraft(true);
+  window.UI.toast('Draft saved on this device (photos included).', 'ok');
+});
+
+// ── load ──────────────────────────────────────────────────────
+window.loadChecklist = loadChecklist;
+function loadChecklist() {
+  var loadEl = document.getElementById('pg-load');
+  loadEl.style.display = 'flex';
+  document.getElementById('retryLoad').style.display = 'none';
+  document.getElementById('loadLbl').textContent = 'Loading your tasks...';
+  window.MPS_API.get('getChecklist', {}).then(function (r) {
+    if (!r.ok || !r.sections) {
+      document.getElementById('loadLbl').textContent = r.error || 'Could not load the checklist.';
+      document.getElementById('retryLoad').style.display = '';
+      return;
+    }
+    today = r.date;
+    secs = r.sections;
+    ans = {}; must = []; tot = 0;
+    secs.forEach(function (s) {
+      s.tasks.forEach(function (t) {
+        tot++;
+        if (t.mandatory) must.push(t.taskId);
+        if (t.submitted && t.submittedStatus) {
+          var ss = t.submittedStatus;
+          ans[t.taskId] = {
+            v: ss.response, r: ss.remarks,
+            serverPhotos: splitServerPhotos(ss.photoRef, ss.photoTime),
+            _done: true, _who: ss.staffName, _ts: ss.timestamp, _status: ss.status, _seq: ss.sequence
+          };
+        }
+      });
+    });
+    // restore today's draft (answers only — photos must be re-added)
+    var draft = loadDraft();
+    if (draft) {
+      Object.keys(draft.answers || {}).forEach(function (tid) {
+        if (!ans[tid] || !ans[tid]._done) {
+          var dt = findTask(tid);
+          var saved = Object.assign({}, draft.answers[tid]);
+          var needsPhoto = !!(dt && (dt.type === 'photo' || dt.photoRequired));
+          // Photos are never kept in drafts, so a photo-type task is not "answered" after restore.
+          if (dt && dt.type === 'photo') saved.v = '';
+          if (needsPhoto && (saved.v || saved.r)) saved._needPhoto = true;
+          ans[tid] = Object.assign(ans[tid] || {}, saved, { photos: undefined });
+        }
+      });
+      markDraftSaved();
+    }
+    document.getElementById('tbSub').textContent =
+      window.Dates.formatFull(today) + ' · ' + me.name;
+    // bring back photos saved with the draft on this device, then render
+    dpLoadAll().then(function (saved) {
+      Object.keys(saved).forEach(function (tid) {
+        var t0 = findTask(tid);
+        if (!t0 || (ans[tid] && ans[tid]._done)) { dpDelete(tid); return; }
+        var a0 = getAns(tid);
+        a0.photos = draftPhotos(saved[tid]);       // older drafts stored one photo another way
+        a0._needPhoto = false;
+        if (t0.type === 'photo' && a0.photos.length) { a0.v = 'Photo'; a0._status = 'OK'; }
+      });
+      build();                                     // the photo grids render with the cards
+      restoreServerPhotos();
+      loadEl.style.display = 'none';
+    });
+  });
+}
+loadChecklist();
+
+// ── render ────────────────────────────────────────────────────
+function build() { renderPending(); renderCompleted(); updateProg(); }
+window.switchTab = function (tab) {
+  ['pending', 'completed'].forEach(function (t) {
+    document.getElementById('mtab-' + t).classList.toggle('active', t === tab);
+    document.getElementById('panel-' + t).classList.toggle('active', t === tab);
+  });
+};
+
+// A task counts as "done" ONLY when the server confirmed it (_done) or its
+// photo was already stored on the server. Draft answers (a.v) must NOT be
+// treated as done — a rejected/failed submission has to stay in Pending.
+function isDone(id) { var a = ans[id]; return !!(a && (a._done || (a.serverPhotos && a.serverPhotos.length))); }
+
+function renderPending() {
+  var body = document.getElementById('pendingBody');
+  body.innerHTML = '';
+  var any = false;
+  secs.forEach(function (s, si) {
+    var tasks = s.tasks.filter(function (t) { return !isDone(t.taskId); });
+    if (!tasks.length) return;
+    any = true;
+    body.appendChild(accordion(s, si, tasks, 'pending'));
+  });
+  if (!any) body.innerHTML = '<div class="empty"><div class="e-icon">&#9989;</div>All tasks are done for today.<br/>Switch to the Completed tab to review or update them.</div>';
+}
+function renderCompleted() {
+  var body = document.getElementById('completedBody');
+  body.innerHTML = '';
+  var any = false;
+  secs.forEach(function (s, si) {
+    var tasks = s.tasks.filter(function (t) { return isDone(t.taskId); });
+    if (!tasks.length) return;
+    any = true;
+    body.appendChild(accordion(s, si, tasks, 'completed'));
+  });
+  if (!any) body.innerHTML = '<div class="empty"><div class="e-icon">&#128203;</div>Nothing completed yet today.</div>';
+}
+
+function accordion(s, si, tasks, tab) {
+  var isOpen = openSecs[tab][si] !== false;
+  var allDone = tasks.every(isDone);
+  var div = document.createElement('div');
+  div.className = 'sec-acc' + (allDone ? ' all-done' : '') + (isOpen ? ' open' : '');
+  div.id = 'acc-' + tab + '-' + si;
+  var badge = allDone
+    ? '<span class="badge green">&#10003; Done</span>'
+    : '<span class="badge amber">' + tasks.length + ' left</span>';
+  div.innerHTML = '<div class="sec-hdr" data-acc="' + tab + '-' + si + '">'
+    + '<div class="sec-hdr-l"><div class="sec-num">' + (si + 1) + '</div>'
+    + '<div class="sec-title">' + window.UI.esc(s.section) + '</div></div>'
+    + '<div class="sec-hdr-r">' + badge + '<span class="sec-chevron">&#9660;</span></div></div>'
+    + '<div class="sec-body"></div>';
+  div.querySelector('.sec-hdr').addEventListener('click', function () {
+    div.classList.toggle('open');
+    openSecs[tab][si] = div.classList.contains('open');
+  });
+  var bodyEl = div.querySelector('.sec-body');
+  tasks.forEach(function (t) { bodyEl.appendChild(card(t, tab)); });
+  return div;
+}
+
+function card(t, tab) {
+  var id = t.taskId, a = ans[id] || {};
+  var div = document.createElement('div');
+  div.id = 'tc_' + id + '_' + tab;
+  var mb = t.mandatory ? '<span class="badge maroon">Mandatory</span>' : '';
+  var pb = t.photoRequired ? '<span class="badge gold">&#128247; Photo</span>' : '';
+
+  if (tab === 'completed') {
+    var passed = a._status !== 'FAIL';
+    div.className = 'tc ' + (passed ? 'done-pass' : 'done-fail');
+    var timeStr = a._ts ? String(a._ts).slice(11, 16) : '';
+    div.innerHTML = '<div class="done-row"><div class="done-icon">' + (passed ? '&#9989;' : '&#10060;') + '</div>'
+      + '<div class="done-info"><div class="done-name">' + window.UI.esc(t.taskName) + ' ' + mb + ' ' + pb + '</div>'
+      + '<div class="done-meta">' + window.UI.esc(a._who || me.name) + (timeStr ? ' · ' + timeStr : '')
+      + photoMeta(a)
+      + (a._seq === 'Update' ? ' · <span class="badge amber">Updated</span>' : '')
+      + (passed ? '' : ' <span class="badge red">Needs attention</span>') + '</div></div></div>'
+      + '<div class="done-expand" data-edit-toggle="' + window.UI.esc(id) + '">&#9998; View / Update &#8964;</div>'
+      + '<div class="edit-body">'
+      + '<div style="font-size:12px;color:var(--ink-60);margin-bottom:8px">Current: <strong>'
+      + window.UI.esc(a.v || (photoTotal(a) ? 'Photo submitted' : '—')) + '</strong>' + (a.r ? ' — ' + window.UI.esc(a.r) : '') + '</div>'
+      + editControls(t) + '</div>';
+  } else {
+    div.className = 'tc' + (a.v === 'no' || a._status === 'FAIL' ? ' fail' : (a.v ? ' ok' : ''));
+    div.innerHTML = '<div class="tc-lbl">' + window.UI.esc(t.taskName) + ' ' + mb + ' ' + pb + '</div>'
+      + (a._needPhoto && !photoTotal(a) ? '<div style="font-size:11px;font-weight:700;color:var(--amber);margin-top:6px">&#128247; Your photo was not saved in the draft. Please take it again.</div>' : '')
+      + pendingControls(t);
+    restoreUI(div, t, a);
+  }
+  return div;
+}
+
+function pendingControls(t) {
+  var id = t.taskId, html = '';
+  if (t.type === 'yesno') {
+    html = '<div class="yno">'
+      + '<button class="yb y" data-yn="yes" data-id="' + id + '">&#10003; Yes</button>'
+      + '<button class="yb n" data-yn="no" data-id="' + id + '">&#10007; No</button></div>'
+      + '<div data-rd="' + id + '" style="display:none"><textarea class="rm" data-rem="' + id + '" placeholder="Describe the issue (required when No)"></textarea></div>';
+  } else if (t.type === 'rating') {
+    html = '<div class="stars" data-stars="' + id + '">'
+      + [1, 2, 3, 4, 5].map(function (n) { return '<span class="star" data-star-n="' + n + '" data-id="' + id + '">&#9733;</span>'; }).join('')
+      + '</div><div data-rd="' + id + '" style="display:none"><textarea class="rm" data-rem="' + id + '" placeholder="Remarks (required for ratings 1–2)"></textarea></div>';
+  } else if (t.type === 'photo') {
+    html = photoArea(t, id, false)
+      + '<textarea class="rm" data-rem="' + id + '" placeholder="Photo remarks (optional)"></textarea>';
+  } else {
+    html = '<textarea class="ti" data-txt="' + id + '" placeholder="Enter your response"></textarea>';
+  }
+  if (t.photoRequired && t.type !== 'photo') html += photoArea(t, id, false);
+  return html;
+}
+
+function editControls(t) {
+  var id = t.taskId, html = '';
+  if (t.type === 'yesno') {
+    html = '<div class="yno">'
+      + '<button class="yb y" data-ey="yes" data-id="' + id + '">&#10003; Yes</button>'
+      + '<button class="yb n" data-ey="no" data-id="' + id + '">&#10007; No</button></div>'
+      + '<div data-erd="' + id + '" style="display:none"><textarea class="rm" data-erem="' + id + '" placeholder="Describe the issue"></textarea></div>';
+  } else if (t.type === 'rating') {
+    html = '<div class="stars" data-estars="' + id + '">'
+      + [1, 2, 3, 4, 5].map(function (n) { return '<span class="star" data-estar-n="' + n + '" data-id="' + id + '">&#9733;</span>'; }).join('') + '</div>';
+  } else if (t.type !== 'photo') {
+    html = '<textarea class="ti" data-etxt="' + id + '" placeholder="Update response"></textarea>';
+  }
+  if (needsPhoto(t)) html += photoArea(t, id, true);
+  html += '<div class="urw" data-urw="' + id + '"><label>Reason for update (required)</label>'
+    + '<textarea data-ureason="' + id + '" placeholder="Why are you updating this entry?"></textarea></div>'
+    + '<button class="btn save-edit" data-save-edit="' + id + '">&#10003; Save Update</button>';
+  return html;
+}
+
+// The photo block of a task: the hint, the Camera / Gallery buttons and the
+// thumbnail grid (one item per photo, each with its own capture time).
+function photoArea(t, id, isEdit) {
+  var key = id + (isEdit ? 'e' : '');
+  return '<div class="ph-area" data-pharea="' + key + '">' + photoAreaInner(t, id, isEdit) + '</div>';
+}
+function photoAreaInner(t, id, isEdit) {
+  var a = getAns(id);
+  var max = maxPhotos();
+  var server = a.serverPhotos || [];
+  var news = a.photos || [];
+  var total = server.length + news.length;
+  var html = total === 0
+    ? '<div class="ph-req">&#128247; A photo of this task is required</div>'
+    : '<div class="ph-more">Add another photo (optional) - ' + total + ' of ' + max + '</div>';
+  if (total < max) {
+    html += '<div class="photo-opts">'
+      + '<button class="photo-opt" data-photo="cam" data-id="' + id + '"' + (isEdit ? ' data-pe="1"' : '') + '>&#128247; Camera</button>'
+      + '<button class="photo-opt" data-photo="gal" data-id="' + id + '"' + (isEdit ? ' data-pe="1"' : '') + '>&#128247; Gallery</button>'
+      + '</div>';
+  }
+  var items = '';
+  server.forEach(function (ph, i) {
+    items += '<div class="ph-item">'
+      + '<img data-sidx="' + i + '" alt="Task photo"/>'
+      + '<div class="ph-time">' + window.UI.esc(fmtPhotoTime(ph.t)) + '</div>'
+      + (isEdit ? '<button class="ph-rm" data-phrm="' + (id + 'e') + '" data-i="' + i + '">Remove</button>' : '')
+      + '</div>';
+  });
+  news.forEach(function (ph, i) {
+    items += '<div class="ph-item">'
+      + '<img src="' + ph.p + '" alt="Task photo"/>'
+      + '<div class="ph-time">' + window.UI.esc(fmtPhotoTime(ph.t)) + '</div>'
+      + '<button class="ph-rm" data-phrm="' + (id + (isEdit ? 'e' : '')) + '" data-i="' + (server.length + i) + '">Remove</button>'
+      + '</div>';
+  });
+  if (items) html += '<div class="ph-grid">' + items + '</div>';
+  return html;
+}
+// Re-render one task's photo block after a pick or a removal.
+function renderPhotoArea(id, isEdit) {
+  var t = findTask(id);
+  var el = document.querySelector('[data-pharea="' + id + (isEdit ? 'e' : '') + '"]');
+  if (!el || !t) return;
+  el.innerHTML = photoAreaInner(t, id, isEdit);
+  fillServerThumbs(el);
+}
+
+function restoreUI(div, t, a) {
+  var id = t.taskId;
+  if (!a.v && !photoTotal(a)) return;
+  if (t.type === 'yesno') {
+    var y = div.querySelector('[data-yn="yes"][data-id="' + id + '"]');
+    var n = div.querySelector('[data-yn="no"][data-id="' + id + '"]');
+    if (y) y.classList.toggle('on', a.v === 'yes');
+    if (n) n.classList.toggle('on', a.v === 'no');
+    var rd = div.querySelector('[data-rd="' + id + '"]');
+    if (rd) rd.style.display = a.v === 'no' ? 'block' : 'none';
+    if (a.r) { var rm = div.querySelector('[data-rem="' + id + '"]'); if (rm) rm.value = a.r; }
+  } else if (t.type === 'rating' && a.v) {
+    var n2 = parseInt(a.v, 10);
+    div.querySelectorAll('[data-stars="' + id + '"] .star').forEach(function (s, k) {
+      s.classList.toggle('on', k < n2);
+    });
+  } else if (t.type === 'text' && a.v) {
+    var tx = div.querySelector('[data-txt="' + id + '"]'); if (tx) tx.value = a.v;
+  }
+}
+
+// ── event delegation ──────────────────────────────────────────
+document.getElementById('panel-pending').addEventListener('click', onAnswerClick);
+document.getElementById('panel-completed').addEventListener('click', onAnswerClick);
+document.getElementById('panel-pending').addEventListener('input', onAnswerInput);
+document.getElementById('panel-completed').addEventListener('input', onAnswerInput);
+document.getElementById('panel-completed').addEventListener('click', function (e) {
+  var tog = e.target.closest('[data-edit-toggle]');
+  if (tog) {
+    var id = tog.getAttribute('data-edit-toggle');
+    var cardEl = document.getElementById('tc_' + id + '_completed');
+    if (cardEl) {
+      cardEl.classList.toggle('edit-open');
+      tog.innerHTML = cardEl.classList.contains('edit-open') ? '&#10006; Close &#8963;' : '&#9998; View / Update &#8964;';
+    }
+    return;
+  }
+  var saveBtn = e.target.closest('[data-save-edit]');
+  if (saveBtn) saveEdit(saveBtn.getAttribute('data-save-edit'), saveBtn);
+});
+
+function onAnswerClick(e) {
+  var el = e.target;
+  var yn = el.closest('[data-yn]');
+  if (yn) { setYesNo(yn.getAttribute('data-id'), yn.getAttribute('data-yn'), false); return; }
+  var eyn = el.closest('[data-ey]');
+  if (eyn) { setYesNo(eyn.getAttribute('data-id'), eyn.getAttribute('data-ey'), true); return; }
+  var star = el.closest('[data-star-n]');
+  if (star) { setStar(star.getAttribute('data-id'), +star.getAttribute('data-star-n'), false); return; }
+  var estar = el.closest('[data-estar-n]');
+  if (estar) { setStar(estar.getAttribute('data-id'), +estar.getAttribute('data-estar-n'), true); return; }
+  var ph = el.closest('[data-photo]');
+  if (ph) {
+    pickPhoto(ph.getAttribute('data-id'), ph.getAttribute('data-photo'), ph.hasAttribute('data-pe'));
+    return;
+  }
+  var rm = el.closest('[data-phrm]');
+  if (rm) { removePhoto(rm.getAttribute('data-phrm'), +rm.getAttribute('data-i')); return; }
+}
+function onAnswerInput(e) {
+  var el = e.target;
+  var rem = el.getAttribute && el.getAttribute('data-rem');
+  if (rem) { getAns(rem).r = el.value; autosave(); return; }
+  var erem = el.getAttribute && el.getAttribute('data-erem');
+  if (erem) { getAns(erem).r = el.value; markUr(erem); return; }
+  var txt = el.getAttribute && el.getAttribute('data-txt');
+  if (txt) {
+    var a = getAns(txt);
+    a.v = el.value.trim();
+    a._status = a.v ? 'OK' : '';
+    var cardEl = document.getElementById('tc_' + txt + '_pending');
+    if (cardEl) cardEl.className = 'tc' + (a.v ? ' ok' : '');
+    autosave(); updateProg();
+    return;
+  }
+  var etxt = el.getAttribute && el.getAttribute('data-etxt');
+  if (etxt) { getAns(etxt).v = el.value.trim(); markUr(etxt); return; }
+}
+
+// 'YYYY-MM-DD HH:MM:SS' → 'HH:MM' (with the date when it is not today)
+function fmtPhotoTime(pt) {
+  if (!pt) return '';
+  return (String(pt).slice(0, 10) === today ? '' : String(pt).slice(0, 10) + ' ') + String(pt).slice(11, 16);
+}
+function getAns(id) { if (!ans[id]) ans[id] = {}; return ans[id]; }
+function findTask(id) {
+  var found = null;
+  secs.forEach(function (s) { s.tasks.forEach(function (t) { if (t.taskId === id) found = t; }); });
+  return found;
+}
+
+function setYesNo(id, v, isEdit) {
+  var a = getAns(id);
+  a.v = v; a._status = v === 'yes' ? 'OK' : 'FAIL';
+  var pfx = isEdit ? '[data-ey=' : '[data-yn=';
+  var wrap = document.querySelector((isEdit ? '#panel-completed' : '#panel-pending'));
+  if (wrap) {
+    wrap.querySelectorAll('[data-ey][data-id="' + id + '"], [data-yn][data-id="' + id + '"]').forEach(function (b) {
+      var val = b.getAttribute('data-ey') || b.getAttribute('data-yn');
+      b.classList.toggle('on', val === v);
+    });
+    var rdSel = (isEdit ? '[data-erd="' : '[data-rd="') + id + '"]';
+    var rd = wrap.querySelector(rdSel);
+    if (rd) rd.style.display = v === 'no' ? 'block' : 'none';
+    var cardSel = '#tc_' + id + '_' + (isEdit ? 'completed' : 'pending');
+    var cardEl = wrap.querySelector(cardSel);
+    if (!isEdit && cardEl) cardEl.className = 'tc ' + (v === 'no' ? 'fail' : 'ok');
+  }
+  if (isEdit) markUr(id); else { autosave(); updateProg(); }
+}
+
+function setStar(id, n, isEdit) {
+  var a = getAns(id);
+  a.v = String(n); a._status = n >= 3 ? 'OK' : 'FAIL';
+  var sel = (isEdit ? '[data-estars="' : '[data-stars="') + id + '"]';
+  var wrapSel = isEdit ? '#panel-completed' : '#panel-pending';
+  var stars = document.querySelector(wrapSel + ' ' + sel);
+  if (stars) {
+    stars.querySelectorAll('.star').forEach(function (s, k) { s.classList.toggle('on', k < n); });
+  }
+  if (!isEdit) {
+    var rd = document.querySelector('#panel-pending [data-rd="' + id + '"]');
+    if (rd) rd.style.display = n < 3 ? 'block' : 'none';
+    var cardEl = document.getElementById('tc_' + id + '_pending');
+    if (cardEl) cardEl.className = 'tc ' + (n < 3 ? 'fail' : 'ok');
+    autosave(); updateProg();
+  } else markUr(id);
+}
+
+function markUr(id) {
+  var urw = document.querySelector('[data-urw="' + id + '"]');
+  if (urw) urw.classList.add('show');
+}
+
+// ── photos (a task may carry up to maxPhotos of them) ─────────
+// A task "needs a photo" when the sheet requires one, or its type IS a photo.
+function needsPhoto(t) { return !!(t && (t.photoRequired || t.type === 'photo')); }
+function maxPhotos() { return CFG.maxPhotos || 5; }
+function photoTotal(a) { return ((a && a.serverPhotos) || []).length + ((a && a.photos) || []).length; }
+// submittedStatus carries comma lists: "id1,id2" + capture times "t1,t2"
+// ("" keeps an empty slot so the two lists stay index-aligned).
+function splitServerPhotos(refs, times) {
+  var ids = String(refs || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  var ts = String(times || '').split(',');
+  return ids.map(function (id, i) { return { id: id, t: String(ts[i] === undefined ? '' : ts[i]).trim() }; });
+}
+function toDraftPhotos(list) {
+  return (list || []).map(function (ph) { return { p: ph.p, t: ph.t || '' }; });
+}
+// Older drafts stored one photo as a {p, t} object or as a plain string.
+function draftPhotos(v) {
+  if (!v) return [];
+  if (typeof v === 'string') return v ? [{ p: v, t: '' }] : [];
+  if (Object.prototype.toString.call(v.photos) === '[object Array]') {
+    return v.photos.filter(function (ph) { return ph && ph.p; }).map(function (ph) { return { p: ph.p, t: ph.t || '' }; });
+  }
+  return v.p ? [{ p: v.p, t: v.t || '' }] : [];
+}
+// Completed-card meta: the first photo's capture time, "+N more" when several.
+function photoMeta(a) {
+  var sp = (a && a.serverPhotos) || [];
+  if (!sp.length) return '';
+  var ft = fmtPhotoTime(sp[0].t);
+  if (!ft && sp.length < 2) return '';
+  var out = ' · &#128247; ' + window.UI.esc(ft);
+  if (sp.length > 1) out += (ft ? ' ' : '') + '+' + (sp.length - 1) + ' more';
+  return out;
+}
+
+function pickPhoto(id, kind, isEdit) {
+  photoTarget = { taskId: id, isEdit: isEdit };
+  if (photoTotal(getAns(id)) >= maxPhotos()) {
+    window.UI.toast('A task can have at most 5 photos.', 'err');
+    return;
+  }
+  var input = document.getElementById(kind === 'cam' ? 'globalCam' : 'globalGal');
+  input.value = '';
+  input.onchange = function () {
+    if (!input.files || !input.files[0]) return;
+    var takenAt = window.Dates.now().date + ' ' + window.Dates.now().time;   // this photo's own capture time
+    window.UI.toast('Processing photo...');
+    window.UI.compressImage(input.files[0], CFG.photo).then(function (dataUrl) {
+      var a = getAns(id);
+      if (photoTotal(a) >= maxPhotos()) { window.UI.toast('A task can have at most 5 photos.', 'err'); return; }
+      a.photos = a.photos || [];
+      a.photos.push({ p: dataUrl, t: takenAt, uploadedId: '' });
+      a._needPhoto = false;
+      if (!isEdit) {
+        dpPut(id, toDraftPhotos(a.photos));
+        var t = findTask(id);
+        if (t && t.type === 'photo') { a.v = 'Photo'; a._status = 'OK'; }
+        var cardEl = document.getElementById('tc_' + id + '_pending');
+        if (cardEl) cardEl.className = 'tc ok';
+        autosave(); updateProg();
+      } else markUr(id);
+      renderPhotoArea(id, isEdit);
+    }).catch(function (err) { window.UI.toast(err.message, 'err'); });
+  };
+  input.click();
+}
+
+// Remove the photo at index (server photos first, then the new ones).
+function removePhoto(key, index) {
+  var isEdit = /e$/.test(key);
+  var id = key.replace(/e$/, '');
+  var a = getAns(id);
+  var t = findTask(id);
+  var server = a.serverPhotos || [];
+  var news = a.photos || [];
+  if (isEdit && needsPhoto(t) && server.length + news.length <= 1) {
+    window.UI.toast('This task needs at least one photo.', 'err');
+    return;
+  }
+  if (index < server.length) {
+    server.splice(index, 1);
+    a.serverPhotos = server;
+    if (isEdit) markUr(id);
+    renderPhotoArea(id, isEdit);
+    return;
+  }
+  news.splice(index - server.length, 1);
+  a.photos = news;
+  if (!isEdit) {
+    if (news.length) dpPut(id, toDraftPhotos(news)); else dpDelete(id);
+    if (t && t.type === 'photo' && !news.length) {         // no photo left → no longer answered
+      a.v = '';
+      a._status = '';
+      var cardEl = document.getElementById('tc_' + id + '_pending');
+      if (cardEl) cardEl.className = 'tc';
+    }
+    autosave(); updateProg();
+  } else markUr(id);
+  renderPhotoArea(id, isEdit);
+}
+
+// Fill the grid slots of the server-stored photos with their private previews.
+function restoreServerPhotos() { fillServerThumbs(document); }
+function fillServerThumbs(root) {
+  root.querySelectorAll('[data-pharea]').forEach(function (areaEl) {
+    var a = ans[areaEl.getAttribute('data-pharea').replace(/e$/, '')];
+    if (!a) return;
+    var sp = a.serverPhotos || [];
+    areaEl.querySelectorAll('img[data-sidx]').forEach(function (img) {
+      var ph = sp[+img.getAttribute('data-sidx')];
+      if (!ph || img.getAttribute('src')) return;
+      window.MPS_API.photoUrl(ph.id).then(function (url) { img.src = url; }).catch(function () {});
+    });
+  });
+}
+
+// ── progress / validation ─────────────────────────────────────
+function updateProg() {
+  var done = 0;
+  secs.forEach(function (s) { s.tasks.forEach(function (t) { if (isDone(t.taskId)) done++; }); });
+  document.getElementById('pn').textContent = done + ' / ' + tot;
+  var pct = tot > 0 ? Math.round((done / tot) * 100) : 0;
+  var pf = document.getElementById('pf');
+  pf.style.width = pct + '%';
+  pf.classList.toggle('full', pct >= 100);
+
+  var pending = tot - done;
+  var mc = document.getElementById('mc-pending');
+  mc.textContent = pending;
+  mc.className = 'tab-count' + (pending > 0 ? ' has' : '');
+  document.getElementById('mc-completed').textContent = done;
+
+  var hasNew = Object.keys(ans).some(function (k) { return !ans[k]._done && (ans[k].v || photoTotal(ans[k])); });
+  document.getElementById('subBtn').disabled = !hasNew;
+
+  var miss = must.filter(function (mid) { return !isDone(mid); });
+  var vm = document.getElementById('vmsg');
+  if (miss.length && hasNew) {
+    var first = findTask(miss[0]);
+    var txt = first ? first.taskName : miss[0];
+    if (txt.length > 38) txt = txt.slice(0, 38) + '…';
+    vm.textContent = miss.length + ' mandatory task' + (miss.length > 1 ? 's' : '') + ' still pending: ' + txt + (miss.length > 1 ? '…' : '');
+    vm.style.display = 'block';
+  } else vm.style.display = 'none';
+}
+
+function validateNew(entries) {
+  var errs = [];
+  var max = (typeof CFG !== 'undefined' && CFG.maxPhotos) ? CFG.maxPhotos : 5;
+  entries.forEach(function (e) {
+    var t = findTask(e.taskId);
+    if (!t) return;
+    var count = (e.pending || []).length + (e.serverIds || []).length;   // new + kept photos
+    if ((t.photoRequired || t.type === 'photo') && count < 1) {
+      errs.push('"' + t.taskName + '": a photo is required.');
+    }
+    if (count > max) {
+      errs.push('"' + t.taskName + '": a task can have at most ' + max + ' photos.');
+    }
+    var answered = e.response || count;
+    if (t.mandatory && !answered) errs.push('"' + t.taskName + '": please answer this mandatory task.');
+    if ((e.response === 'no' || (parseInt(e.response, 10) >= 1 && parseInt(e.response, 10) <= 2 && t.type === 'rating')) && !(e.remarks || '').trim()) {
+      errs.push('"' + t.taskName + '": please add a remark explaining the issue.');
+    }
+  });
+  return errs;
+}
+
+// ── submit ────────────────────────────────────────────────────
+window.doSubmit = doSubmit;
+function doSubmit() {
+  var entries = [];
+  secs.forEach(function (s) {
+    s.tasks.forEach(function (t) {
+      var a = ans[t.taskId];
+      if (!a || a._done) return;
+      var sp = a.serverPhotos || [];
+      var np = a.photos || [];
+      if (!a.v && !np.length && !sp.length) return;
+      entries.push({
+        taskId: t.taskId,
+        section: s.section, task: t,
+        response: a.v || '', remarks: a.r || '',
+        serverIds: sp.map(function (ph) { return ph.id; }),
+        serverTimes: sp.map(function (ph) { return ph.t || ''; }),
+        pending: np,
+        photoRef: '', photoTime: ''
+      });
+    });
+  });
+  if (!entries.length) { window.UI.toast('Nothing new to submit.', 'err'); return; }
+
+  var errs = validateNew(entries);
+  if (errs.length) { window.UI.toast(errs[0], 'err'); return; }
+
+  var btn = document.getElementById('subBtn');
+  btn.disabled = true;
+
+  // Keep one idempotency key for this batch until the server confirms —
+  // a retry after a timeout can never create duplicate records.
+  // A different set of tasks must never reuse an old batch id (the server would
+  // treat it as an already-saved duplicate and silently skip the new tasks).
+  var batchKey = entries.map(function (e) { return e.task.taskId; }).sort().join(',');
+  if (!pendingBatchId || pendingBatchKey !== batchKey) {
+    pendingBatchId = window.UI.uuid();
+    pendingBatchKey = batchKey;
+    persistPending(pendingBatchId, batchKey);
+  }
+
+  uploadPhotosThen(entries, btn, 'Submit Checklist', function () {
+    btn.textContent = 'Submitting...';
+    submitEntries(entries, btn);
+  });
+}
+
+// Upload the not-yet-stored photos of every entry, one at a time. A photo
+// that already carries an uploadedId (a retry after a failure) is skipped,
+// so it is never uploaded twice. When all are up, each entry gets
+// photoRef/photoTime as ","-lists: the kept server photos first, then the
+// new ones, with the time slots kept index-aligned.
+function uploadPhotosThen(entries, btn, resetLabel, doneCb) {
+  var jobs = [];
+  entries.forEach(function (e) {
+    (e.pending || []).forEach(function (ph) {
+      if (!ph.uploadedId) jobs.push({ e: e, ph: ph });
+    });
+  });
+  var i = 0;
+  function next() {
+    if (i >= jobs.length) { finish(); return; }
+    var job = jobs[i];
+    btn.textContent = 'Uploading photo ' + (i + 1) + ' of ' + jobs.length + '...';
+    window.MPS_API.post('uploadPhoto', { photoBase64: job.ph.p, taskId: job.e.task.taskId, photoTime: job.ph.t || '' }).then(function (r) {
+      if (!r.ok) {
+        window.UI.toast('Photo upload failed for "' + job.e.task.taskName + '": ' + (r.error || 'try again'), 'err');
+        btn.disabled = false;
+        btn.textContent = resetLabel;
+        return; // stop — the user decides whether to retry
+      }
+      job.ph.uploadedId = r.photoId;
+      i++;
+      next();
+    });
+  }
+  function finish() {
+    entries.forEach(function (e) {
+      var ids = (e.serverIds || []).slice();
+      var times = (e.serverTimes || []).slice();
+      (e.pending || []).forEach(function (ph) {
+        ids.push(ph.uploadedId || '');
+        times.push(ph.t || '');
+      });
+      e.photoRef = ids.join(',');
+      e.photoTime = times.join(',');
+    });
+    doneCb();
+  }
+  next();
+}
+
+function submitEntries(entries, btn) {
+  var payload = {
+    batchId: pendingBatchId,
+    entries: entries.map(function (e) {
+      return {
+        taskId: e.task.taskId,
+        response: e.response,
+        remarks: e.remarks,
+        photoRef: e.photoRef || '',
+        photoTime: e.photoRef ? (e.photoTime || '') : ''
+      };
+    })
+  };
+  window.MPS_API.post('submitChecklist', payload).then(function (r) {
+    if (!r.ok) {
+      window.UI.toast(r.error || 'Submission failed. Please retry.', 'err');
+      btn.disabled = false;
+      btn.textContent = 'Submit Checklist';
+      return; // answers stay on screen; retry reuses the same batchId
+    }
+    // Server confirmed — only now mark as done and celebrate.
+    entries.forEach(function (e) {
+      var a = getAns(e.task.taskId);
+      a._done = true;
+      a._who = me.name;
+      a._ts = r.timestamp || (window.Dates.now().date + ' ' + window.Dates.now().time);
+      a._status = e.response === 'no' ? 'FAIL' : (a._status || 'OK');
+      a._seq = (r.saved || []).reduce(function (seq, s) {
+        return s.taskId === e.task.taskId ? s.sequence : seq;
+      }, 'First');
+      if (e.photoRef) a.serverPhotos = splitServerPhotos(e.photoRef, e.photoTime);
+      a.photos = [];
+      dpDelete(e.task.taskId);
+    });
+    pendingBatchId = null;
+    pendingBatchKey = '';
+    clearPending();
+    clearDraft();
+    document.getElementById('doneMsg').textContent = me.name + ' — your checklist was saved.';
+    document.getElementById('doneTime').textContent = window.Dates.formatFull(r.date || window.Dates.today()) + ' at ' + (r.timestamp || '').slice(11) + ' IST';
+    document.getElementById('pg-done').classList.add('active');
+  });
+}
+
+// pending-submit persistence (safe retry after closing the page)
+function persistPending(batchId, batchKey) {
+  try { localStorage.setItem('mps_pending_' + me.name + '_' + today, JSON.stringify({ batchId: batchId, batchKey: batchKey })); } catch (e) {}
+}
+function clearPending() {
+  try { localStorage.removeItem('mps_pending_' + me.name + '_' + today); } catch (e) {}
+}
+(function restorePending() {
+  try {
+    var raw = localStorage.getItem('mps_pending_' + me.name + '_' + window.Dates.today());
+    if (raw) {
+      var d = JSON.parse(raw);
+      if (d && d.batchId && d.batchKey) { pendingBatchId = d.batchId; pendingBatchKey = d.batchKey; } // safe: server treats a repeated batch as a duplicate
+    }
+  } catch (e) {}
+})();
+
+// ── edit / update a submitted task ────────────────────────────
+function saveEdit(id, btn) {
+  var t = findTask(id);
+  var a = getAns(id);
+  var reasonEl = document.querySelector('[data-ureason="' + id + '"]');
+  var reason = reasonEl ? reasonEl.value.trim() : '';
+  if (!reason) { window.UI.toast('Please enter a reason for the update.', 'err'); return; }
+
+  var response = a.v || '';
+  var remarks = a.r || '';
+  var eRem = document.querySelector('[data-erem="' + id + '"]');
+  if (eRem && eRem.value.trim()) remarks = eRem.value.trim();
+  var eTxt = document.querySelector('[data-etxt="' + id + '"]');
+  if (eTxt) response = eTxt.value.trim();
+
+  if (t.type !== 'photo' && !response) { window.UI.toast('Please choose a new response first.', 'err'); return; }
+  var server = a.serverPhotos || [];
+  var news = a.photos || [];
+  if (needsPhoto(t) && !server.length && !news.length) { window.UI.toast('A photo is required for this task.', 'err'); return; }
+  if (response === 'no' && !remarks) { window.UI.toast('A remark is required when a task fails.', 'err'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  function send(photoRef, photoTimes) {
+    window.MPS_API.post('submitChecklist', {
+      batchId: window.UI.uuid(),
+      entries: [{ taskId: id, response: t.type === 'photo' ? (response || 'Photo') : response, remarks: remarks, photoRef: photoRef || '', photoTime: photoRef ? (photoTimes || '') : '', updateReason: reason }]
+    }).then(function (r) {
+      btn.disabled = false;
+      btn.textContent = '✓ Save Update';
+      if (!r.ok) { window.UI.toast(r.error || 'Update failed.', 'err'); return; }
+      a._done = true;
+      a._who = me.name;
+      a._ts = r.timestamp || '';
+      a._status = (t.type === 'yesno' && response === 'no') ? 'FAIL' : (t.type === 'rating' && parseInt(response, 10) < 3 ? 'FAIL' : 'OK');
+      a._seq = 'Update';
+      a.r = remarks;
+      if (photoRef) a.serverPhotos = splitServerPhotos(photoRef, photoTimes);
+      a.photos = [];
+      window.UI.toast('Entry updated.', 'ok');
+      build();
+      restoreServerPhotos();
+    });
+  }
+
+  // Upload the new photos first (a photo that already has an uploadedId is
+  // skipped, so a retry never uploads it twice), then save the kept server
+  // ids followed by the freshly uploaded ones.
+  var entry = {
+    task: t, pending: news,
+    serverIds: server.map(function (ph) { return ph.id; }),
+    serverTimes: server.map(function (ph) { return ph.t || ''; }),
+    photoRef: '', photoTime: ''
+  };
+  uploadPhotosThen([entry], btn, '✓ Save Update', function () {
+    send(entry.photoRef, entry.photoTime);
+  });
+}
+
+// ── draft photos: kept in this browser's IndexedDB until submitted ──
+// (answers go to localStorage; photos are too big for it). Nothing here is
+// ever sent anywhere until the staff member presses Submit.
+var dpDbPromise = null;
+function dpOpen() {
+  if (!dpDbPromise) {
+    dpDbPromise = new Promise(function (resolve) {
+      try {
+        var req = window.indexedDB.open('mps_draft_photos', 1);
+        req.onupgradeneeded = function () { req.result.createObjectStore('photos'); };
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { resolve(null); };
+        req.onblocked = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+  }
+  return dpDbPromise;
+}
+function dpKey(id) { return me.name + '|' + today + '|' + id; }
+function dpPut(id, photos) {
+  dpOpen().then(function (db) {
+    if (!db) return;
+    try { db.transaction('photos', 'readwrite').objectStore('photos').put({ photos: photos || [] }, dpKey(id)); } catch (e) {}
+  });
+}
+function dpDelete(id) {
+  dpOpen().then(function (db) {
+    if (!db) return;
+    try { db.transaction('photos', 'readwrite').objectStore('photos').delete(dpKey(id)); } catch (e) {}
+  });
+}
+// Returns { taskId: { photos: [...] } } for today (older drafts may hold a
+// single {p, t} object or a plain string); removes this user's older-day leftovers.
+function dpLoadAll() {
+  return dpOpen().then(function (db) {
+    if (!db) return {};
+    return new Promise(function (resolve) {
+      var out = {}, mine = me.name + '|', todayPfx = me.name + '|' + today + '|';
+      try {
+        var store = db.transaction('photos', 'readwrite').objectStore('photos');
+        var req = store.openCursor();
+        req.onsuccess = function () {
+          var cur = req.result;
+          if (!cur) { resolve(out); return; }
+          var k = String(cur.key);
+          if (k.indexOf(todayPfx) === 0) out[k.slice(todayPfx.length)] = cur.value;
+          else if (k.indexOf(mine) === 0) cur.delete();
+          cur.continue();
+        };
+        req.onerror = function () { resolve(out); };
+      } catch (e) { resolve({}); }
+    });
+  });
+}
+function dpClearAll() {
+  dpLoadAll().then(function (m) { Object.keys(m).forEach(dpDelete); });
+}
+
+// ── local drafts (answers in localStorage; photos in IndexedDB) ─
+var draftTimer = null;
+function autosave() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(function () { saveDraft(false); }, 700);
+}
+function draftKey() { return 'mps_draft_' + me.name + '_' + today; }
+function saveDraft(manual) {
+  try {
+    var toSave = {};
+    Object.keys(ans).forEach(function (k) {
+      if (ans[k]._done) return;
+      toSave[k] = { v: ans[k].v || '', r: ans[k].r || '' }; // never persist photo data
+    });
+    localStorage.setItem(draftKey(), JSON.stringify({ date: today, answers: toSave }));
+    markDraftSaved();
+  } catch (e) { /* storage full — non-fatal */ }
+}
+function markDraftSaved() {
+  var b = document.getElementById('draftBtn');
+  b.innerHTML = '&#128190; Saved';
+  b.classList.add('saved');
+}
+function loadDraft() {
+  try {
+    var raw = localStorage.getItem(draftKey());
+    if (!raw) return null;
+    var d = JSON.parse(raw);
+    if (!d || d.date !== today) { localStorage.removeItem(draftKey()); return null; }
+    return d;
+  } catch (e) { return null; }
+}
+function clearDraft() { try { localStorage.removeItem(draftKey()); } catch (e) {} dpClearAll(); }
+
+// session expiry notice from the API layer
+window.addEventListener('storage', function () { /* no-op; kept for future */ });
+
+})();
+</script>
+</body>
+</html>
