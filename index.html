@@ -10,15 +10,22 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="css/theme.css"/>
 <style>
-  html, body { height: 100%; }
-  body {
+  /* One background for the WHOLE page: the gradient is declared on html AND
+     body and pinned to the viewport (background-attachment: fixed), so it
+     always fills the visible area and no lighter band can appear below it. */
+  html, body {
+    min-height: 100%;
+    min-height: 100dvh;              /* mobile URL bar can't reveal a band */
     background:
       radial-gradient(1100px 500px at 50% -120px, rgba(201, 162, 39, .22), transparent 62%),
       linear-gradient(180deg, var(--maroon-dark) 0%, var(--maroon-deep) 100%);
+    background-attachment: fixed;
+  }
+  body {
     display: flex; align-items: center; justify-content: center;
     overflow-x: hidden; overflow-y: auto;
   }
-  .wrap { display: flex; flex-direction: column; align-items: center; width: 100%; padding: 20px; margin: auto; }
+  .wrap { display: flex; flex-direction: column; align-items: center; width: 100%; padding: 16px; margin: auto; }
   .logo-chip {
     width: 104px; height: 104px;
     background: var(--cream);
@@ -30,7 +37,7 @@
   }
   .logo-chip img { max-width: 100%; max-height: 100%; object-fit: contain; }
   .s-name { font-family: var(--font-head); font-size: 25px; color: #FFF8E7; margin-bottom: 4px; text-align: center; }
-  .tagline { font-size: 10.5px; color: var(--gold-light); letter-spacing: .16em; text-transform: uppercase; margin-bottom: 26px; text-align: center; }
+  .tagline { font-size: 10.5px; color: var(--gold-light); letter-spacing: .16em; text-transform: uppercase; margin-bottom: 20px; text-align: center; }
   .pin-label { font-size: 10.5px; color: rgba(255, 248, 231, .55); letter-spacing: .14em; text-transform: uppercase; margin-bottom: 12px; }
   .dots { display: flex; gap: 15px; justify-content: center; margin-bottom: 24px; }
   .dot { width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(229, 199, 107, .45); background: transparent; transition: all .15s; }
@@ -45,7 +52,7 @@
   }
   .k:active { background: rgba(201, 162, 39, .38); transform: scale(.93); }
   .k-del { background: rgba(179, 38, 30, .55); color: #FFC9C2; font-size: 16px; }
-  .msg { font-size: 12.5px; min-height: 34px; margin-top: 13px; text-align: center; color: #FFB3A8; max-width: 300px; }
+  .msg { font-size: 12.5px; min-height: 28px; margin-top: 10px; text-align: center; color: #FFB3A8; max-width: 300px; }
   .msg.info { color: rgba(255, 248, 231, .55); }
   .go {
     display: block; margin: 16px auto 0; width: 222px; height: 48px;
@@ -59,7 +66,27 @@
   .loader.show { display: flex; }
   .loader .spinner { border-color: rgba(229, 199, 107, .25); border-top-color: var(--gold-light); }
   .load-txt { font-size: 12.5px; color: rgba(255, 248, 231, .6); }
-  .foot { font-size: 10px; color: var(--ink-30); letter-spacing: .08em; margin-top: 10px; }
+  /* tighter than the shared default so the login fits one screen */
+  .cb-footer { margin-top: 16px; }
+
+  /* Short screens (360×640 phones, laptops): tighten every gap and shrink
+     the keypad so the whole login fits on ONE screen with no scrollbar. */
+  @media (max-height: 700px) {
+    .wrap { padding: 12px; }
+    .logo-chip { width: 76px; height: 76px; border-radius: 16px; padding: 7px; margin-bottom: 10px; }
+    .s-name { font-size: 21px; margin-bottom: 2px; }
+    .tagline { font-size: 9.5px; margin-bottom: 12px; }
+    .pin-label { margin-bottom: 8px; }
+    .dots { gap: 12px; margin-bottom: 14px; }
+    .dot { width: 11px; height: 11px; }
+    .pad { grid-template-columns: repeat(3, 56px); gap: 7px; }
+    .k { width: 56px; height: 56px; font-size: 17px; border-radius: 12px; }
+    .go { height: 42px; margin-top: 12px; font-size: 14px; }
+    .msg { min-height: 22px; margin-top: 8px; }
+    .loader { margin-top: 8px; }
+    .cb-footer { margin-top: 12px; }
+    .cb-footer img { height: 28px; }
+  }
 </style>
 </head>
 <body>
@@ -86,17 +113,14 @@
     <div class="msg" id="msg"></div>
   </div>
 
+  <div class="cb-footer">
+    <img class="cb-logo--onDark" src="images/cb-logo.png" alt="Consulting &amp; Beyond" onerror="this.style.display='none'"/>
+  </div>
+
   <div class="loader" id="loader">
     <div class="spinner"></div>
     <div class="load-txt" id="loadTxt">Verifying...</div>
   </div>
-
-  <div class="cb-footer">
-    <span class="cb-lbl">Implemented by</span>
-    <img src="images/cb-logo.jpg" alt="Consulting &amp; Beyond" onerror="this.style.display='none'"/>
-    <div class="cb-name">Consulting &amp; Beyond</div>
-  </div>
-  <div class="foot">MPS SILKS &middot; KGF</div>
 </div>
 
 <script src="js/config.js"></script>

@@ -206,19 +206,44 @@ and photo lists). `downloadReport(data, opts)` lazily injects the **vendored**
 `js/vendor/jspdf.umd.min.js` (never a CDN), fetches the photos through the
 same private `getPhoto` endpoint (3 in flight, progress shown, failures drawn
 as "Photo unavailable"), re-compresses thumbs to ≤ 800 px, and renders an A4
-report in the MPS palette: header with the MPS logo, summary strip, a table
-per section (Task | Response | Status | Remarks, coloured **and** worded
-status), photo thumbnails with "Photo taken: … IST" + "Photo *i* of *n*"
-captions, and a footer on every page with the C&B logo. Saving uses a Blob URL
+report in the MPS palette: a maroon header with the MPS logo on the left and
+the white C&B logo on the right, a summary strip, a table per section
+(Task | Response | Status | Remarks, coloured **and** worded status), photo
+thumbnails with "Photo taken: … IST" + "Photo *i* of *n*" captions, and a
+text-only footer on every page (staff + date on the left, "Page *x* of *y*"
+on the right). Saving uses a Blob URL
 where `a.download` is unavailable (iOS Safari). An admin-wide variant can reuse
 the same two functions from `dashboard.html` with a `getDashboard` payload.
 
-## 12. Branding footer
+## 12. Branding logo
 
-Every page renders a shared `.cb-footer` credit ("Implemented by Consulting &
-Beyond") from `css/theme.css`. The logo is `images/cb-logo.jpg`; the `<img>`
-carries `onerror="this.style.display='none'"`, so a missing or unreadable file
-degrades to the text credit instead of a broken image. The same logo appears in
-the PDF footer, where jsPDF's `addImage` **detects the format from the loaded
-data URL** (`image/jpeg` → `JPEG`, `image/png` → `PNG`) instead of assuming one,
-and it is skipped cleanly if the file fails to load.
+Every page renders a shared `.cb-footer` block from `css/theme.css` containing
+only the C&B logo image — no card, no box, no background and no text, so it
+blends into whatever the page already shows. The file is
+`images/cb-logo.png` (transparent PNG); the `<img>` carries
+`onerror="this.style.display='none'"`, so a missing or unreadable file simply
+collapses the footer instead of showing a broken image.
+
+The artwork is dark grey, so it needs two renderings, both driven off the
+**same single file**:
+
+| Surface | Rendering |
+| --- | --- |
+| Light pages (`checklist`, `dashboard`, `admin`) | the PNG as-is |
+| Dark surfaces (maroon login page) | `.cb-logo--onDark` → `filter: brightness(0) invert(1)` |
+| PDF header (maroon band) | recoloured white at runtime in `js/report.js` |
+
+The runtime white version draws the PNG onto a canvas and paints it with
+`globalCompositeOperation = 'source-in'` plus a white fill, which keeps the
+PNG's alpha and replaces only its colour, then re-exports PNG. No second image
+file exists on disk.
+
+In the PDF the C&B logo sits in the **header**, top-right inside the maroon
+band, mirroring the MPS logo on the left: 11 mm tall, right margin equal to the
+left margin, aspect ratio taken from the image's real pixel dimensions, and
+vertically centred in the band. The title shrinks if it would otherwise reach
+the logo, so the two never overlap. Page footers carry text only —
+"MPS Silks Store Operations Checklist - <staff> - <date>" and "Page x of y" —
+with no logo. jsPDF's `addImage` **detects the format from the loaded data
+URL** (`image/png` → `PNG`, `image/jpeg` → `JPEG`) instead of assuming one, and
+the logo is skipped cleanly if it fails to load.

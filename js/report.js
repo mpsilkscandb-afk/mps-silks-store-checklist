@@ -158,8 +158,8 @@
   }
 
   // Load an image (same-origin URL or data URL) as a data URL that KEEPS THE
-  // FILE'S OWN FORMAT — images/cb-logo.jpg stays JPEG instead of being
-  // re-encoded to PNG on a canvas (that also keeps its pixels untouched).
+  // FILE'S OWN FORMAT — images/cb-logo.png stays PNG (alpha intact) instead of
+  // being re-encoded on a canvas, so its pixels are never touched.
   function toDataUrl(src) {
     if (!src) return Promise.resolve(null);
     if (/^data:/i.test(src)) return Promise.resolve(src);   // already a data URL
@@ -194,6 +194,41 @@
     if (!fmt) return false;
     try { doc.addImage(dataUrl, fmt, x, y, w, h); return true; }
     catch (e) { return false; }
+  }
+
+  // The Consulting & Beyond artwork is dark grey, so on the maroon header band we need it
+  // white. That version is made at RUNTIME: draw the same PNG onto a canvas,
+  // paint it with 'source-in' + white (which keeps the PNG's alpha and only
+  // replaces its colour), and export PNG again. One file, no second asset.
+  // The canvas is capped at 600 px wide — still ~350 dpi at the 43 mm it is
+  // drawn at — because jsPDF stores PNG as raw RGB, so a full-size copy would
+  // add ~750 KB to every PDF.
+  // Returns null on any failure so the caller can skip the logo entirely.
+  function whiteLogo(dataUrl) {
+    return new Promise(function (resolve) {
+      if (!dataUrl || typeof Image === 'undefined' || typeof document === 'undefined') {
+        resolve(null); return;
+      }
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var sw = img.naturalWidth || img.width, sh = img.naturalHeight || img.height;
+          if (!sw || !sh) { resolve(null); return; }
+          var w = sw, h = sh;
+          if (w > 600) { h = Math.round(h * 600 / w); w = 600; }
+          var c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          var ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          ctx.globalCompositeOperation = 'source-in';   // keep the alpha shape
+          ctx.fillStyle = '#FFFFFF';                    // replace the colour
+          ctx.fillRect(0, 0, w, h);
+          resolve(c.toDataURL('image/png'));
+        } catch (e) { resolve(null); }
+      };
+      img.onerror = function () { resolve(null); };
+      img.src = dataUrl;
+    });
   }
 
   // Photo thumbs are re-compressed small so the PDF stays email/phone friendly.
@@ -246,7 +281,6 @@
     var loader = o.photoLoader;
     var onProgress = o.onProgress || function () {};
     var jsPdfCtor;
-    var logoMps = null, logoCb = null;
     return ensureJsPdf().then(function (Ctor) {
       jsPdfCtor = Ctor;
       var refs = [];
@@ -259,10 +293,14 @@
       });
       return Promise.all([
         loader ? fetchPhotos(refs, loader, onProgress) : Promise.resolve({}),
-        toDataUrl('images/mps-logo.png'),      // MPS header logo
-        toDataUrl('images/cb-logo.jpg')        // footer logo (optional)
+        toDataUrl('images/mps-logo.png'),      // MPS header logo (left)
+        toDataUrl('images/cb-logo.png')        // Consulting & Beyond header logo (right, optional)
       ]).then(function (r) {
-        return { photos: r[0], mps: r[1], cb: r[2] };
+        // The header band is maroon, so the dark artwork is recoloured white
+        // at runtime; if anything fails we simply ship no Consulting & Beyond logo.
+        return whiteLogo(r[2]).then(function (white) {
+          return { photos: r[0], mps: r[1], cb: white };
+        });
       });
     }).then(function (assets) {
       onProgress('Preparing PDF...');
@@ -311,12 +349,37 @@
       // ── page 1 header band ─────────────────────────────────
       doc.setFillColor.apply(doc, MAROON);
       doc.rect(0, 0, W, 30, 'F');
+
+      // Consulting & Beyond credit, top RIGHT of the band: 11 mm tall, right margin equal to
+      // the left one, aspect ratio taken from the image's real pixels. If it
+      // did not load we simply never draw it.
+      var cbRight = W - MR;
+      if (assets.cb) {
+        var cbH = 11, cbW = 0;
+        try {
+          var dims = doc.getImageProperties(assets.cb);
+          if (dims && dims.width && dims.height) cbW = cbH * dims.width / dims.height;
+        } catch (e) { cbW = 0; }
+        if (cbW > 0 && cbW < CW * 0.5) {                 // sanity: never eat the title
+          if (addImage(doc, assets.cb, cbRight - cbW, (30 - cbH) / 2, cbW, cbH)) {
+            cbRight -= (cbW + 6);                        // title may not reach it
+          }
+        }
+      }
+
       var tx = ML;
       if (assets.mps && addImage(doc, assets.mps, ML, 6, 18, 18)) tx = ML + 22;
       doc.setTextColor(255, 248, 231);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(15);
-      doc.text(safeText(data.header.title), tx, 13);
+      var titleSize = 15;
+      doc.setFontSize(titleSize);
+      // Never let the title run under the Consulting & Beyond logo: shrink it to fit.
+      var title = safeText(data.header.title);
+      while (titleSize > 10 && doc.getTextWidth(title) > (cbRight - tx)) {
+        titleSize -= 0.5;
+        doc.setFontSize(titleSize);
+      }
+      doc.text(title, tx, 13);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9.5);
       doc.setTextColor(226, 200, 140);
@@ -497,7 +560,7 @@
         doc.text('No tasks were submitted for this day.', ML, y + 5);
       }
 
-      // ── footer on EVERY page ───────────────────────────────
+      // ── footer on EVERY page: text only, no logo ───────────
       var pages = doc.getNumberOfPages();
       var footerLeft = 'MPS Silks Store Operations Checklist - ' +
         (data.header.staffName || '-') + ' - ' + (data.header.reportDate || '-');
@@ -510,12 +573,6 @@
         doc.setTextColor.apply(doc, INK60);
         doc.text(safeText(footerLeft), ML, H - 9);
         doc.text('Page ' + p + ' of ' + pages, W - MR, H - 9, { align: 'right' });
-        if (assets.cb) {                  // "Implemented by" logo (format from data URL)
-          if (addImage(doc, assets.cb, W - MR - 8, H - 12.4, 8, 8)) {
-            doc.setFontSize(6.5);
-            doc.text('Implemented by', W - MR - 8 - 2, H - 8, { align: 'right' });
-          }
-        }
       }
       return doc;
     });
@@ -547,6 +604,7 @@
     downloadReport: downloadReport,
     prettyStamp: prettyStamp,
     safeText: safeText,
-    imgFormat: imgFormat
+    imgFormat: imgFormat,
+    whiteLogo: whiteLogo
   };
 })(typeof window !== 'undefined' ? window : globalThis);

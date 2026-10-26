@@ -605,17 +605,45 @@ test('jsPDF is vendored locally (no CDN) and copied into dist', () => {
 });
 
 
-// -- C&B footer + docs for the new assets -----------------------
-test('every page carries the shared "Implemented by Consulting & Beyond" footer', () => {
+// -- C&B logo + docs for the assets -------------------------------
+test('every page carries the shared C&B logo — image only, no card, no text', () => {
   PAGES.forEach((p) => {
     const src = read(p);
     assert.match(src, /class="cb-footer"/, p + ' footer block');
-    assert.match(src, /images\/cb-logo\.jpg/, p + ' C&B logo');
+    assert.match(src, /images\/cb-logo\.png/, p + ' C&B logo');
     assert.match(src, /onerror="this\.style\.display=.(none|'none')."/,
       p + ' footer must hide the logo when the file is missing');
-    assert.match(src, /Consulting &amp; Beyond/, p + ' text credit survives a missing logo');
+    // logo only: no label, no name, no leftover copy inside the footer
+    const block = (src.match(/<div class="cb-footer"[^>]*>[\s\S]*?<\/div>/) || [''])[0];
+    assert.doesNotMatch(block, /Implemented by/i, p + ' carries no "Implemented by" text');
+    assert.doesNotMatch(block, /cb-lbl|cb-name/, p + ' has no label/name children');
+    assert.strictEqual((block.match(/<img/g) || []).length, 1, p + ' footer holds exactly one image');
+    // login page renders the logo on maroon, so it must use the white variant
+    assert.strictEqual(/cb-logo--onDark/.test(block), p === 'index.html',
+      p + (p === 'index.html' ? ' must whiten the logo on the dark login page'
+                              : ' shows the normal-colour logo on a light page'));
   });
   assert.match(read('css/theme.css'), /\.cb-footer \{/, 'the footer style lives in the shared theme');
+});
+
+test('no page or script says "Implemented by" anywhere', () => {
+  [...PAGES, 'js/report.js'].forEach((f) => {
+    assert.doesNotMatch(read(f), /Implemented by/i,
+      f + ' must not carry the old "Implemented by" credit');
+  });
+});
+
+test('the shared C&B footer is transparent: no card, box, background or border', () => {
+  const css = read('css/theme.css');
+  const block = (css.match(/\.cb-footer \{[^}]*\}/) || [''])[0];
+  assert.ok(block, '.cb-footer rule exists');
+  assert.match(block, /background:\s*none/, '.cb-footer must have no background');
+  assert.match(block, /border:\s*0/, '.cb-footer must have no border');
+  assert.match(block, /padding:\s*0/, '.cb-footer must have no padding box');
+  assert.doesNotMatch(block, /background:\s*var\(--cream\)|border-radius|box-shadow|border-top/,
+    '.cb-footer must not look like a card');
+  assert.match(css, /\.cb-logo--onDark \{\s*filter:\s*brightness\(0\) invert\(1\)/,
+    'the on-dark variant whitens the same PNG with a CSS filter');
 });
 
 test('docs cover the new pieces: vendored jsPDF, logo, PDF report, photos tab', () => {
@@ -626,10 +654,11 @@ test('docs cover the new pieces: vendored jsPDF, logo, PDF report, photos tab', 
   assert.match(arch, /cellToIstString/, 'architecture explains the capture-time repair');
   assert.match(arch, /PDF report/i, 'architecture documents the PDF report');
   assert.match(arch, /photo gallery/i, 'architecture documents the Photos tab');
-  assert.match(arch, /cb-logo\.jpg/, 'architecture documents where the C&B logo lives');
+  assert.match(arch, /cb-logo\.png/, 'architecture documents where the C&B logo lives');
+  assert.match(arch, /source-in/, 'architecture explains the runtime white logo');
   const api = read('docs/API.md');
   assert.match(api, /optionally `section`/, 'API.md documents the getPhotos section param');
   const readme = read('README.md');
-  assert.match(readme, /cb-logo\.jpg/, 'README says where the logo goes and how to replace it');
+  assert.match(readme, /cb-logo\.png/, 'README says where the logo goes and how to replace it');
   assert.match(readme, /Download PDF report|PDF report/, 'README explains how to produce the PDF');
 });

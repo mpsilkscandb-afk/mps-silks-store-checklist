@@ -265,32 +265,30 @@ table.data tr.clickable:hover td { background: var(--gold-pale); }
 .score-fill.r { background: var(--red); }
 .score-pct { font-size: 11px; font-weight: 700; width: 36px; text-align: right; }
 
-/* ── "Implemented by Consulting & Beyond" footer ───────────────
-   Shared by every page. The logo file is optional: if images/cb-logo.jpg
-   is missing or fails to load, the onerror handler hides the <img> and the
-   text credit remains, so the footer never shows a broken icon. */
+/* ── Consulting & Beyond credit logo ─────────────────────────────────────────
+   The logo ALONE: no card, no box, no background, no border and no
+   text — it just sits on whatever the page already shows. The file
+   is optional: if images/cb-logo.png is missing or fails to load,
+   the onerror handler hides the <img> and the footer collapses to
+   nothing, so a missing file never leaves a broken icon or a hole.
+   On dark surfaces (the maroon login page) add .cb-logo--onDark to
+   turn the dark-grey artwork white with a filter — same PNG file. */
 .cb-footer {
-  margin: 26px auto 0;
-  padding: 12px 16px 14px;
+  margin: 22px auto 0;
   max-width: 660px;
   text-align: center;
-  background: var(--cream);
-  border-top: 1px solid var(--border);
-  border-radius: var(--r) var(--r) 0 0;
-}
-.cb-footer .cb-lbl {
-  display: block;
-  font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--ink-30); margin-bottom: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
 }
 .cb-footer img {
-  height: 28px; max-width: 120px; object-fit: contain;
-  display: block; margin: 0 auto 4px;
+  height: 30px; max-width: 140px; object-fit: contain;
+  display: inline-block; opacity: .9;
 }
-.cb-footer .cb-name { font-size: 11px; font-weight: 700; color: var(--ink-60); }
+.cb-logo--onDark { filter: brightness(0) invert(1); }
 @media (max-width: 400px) {
-  .cb-footer { margin-top: 18px; }
-  .cb-footer img { height: 24px; }
+  .cb-footer { margin-top: 16px; }
+  .cb-footer img { height: 26px; }
 }
 
 @media (max-width: 640px) {

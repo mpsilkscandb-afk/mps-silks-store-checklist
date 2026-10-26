@@ -115,21 +115,28 @@ test('report page: jsPDF is vendored and lazy-loaded, no CDN', () => {
   assert.strictEqual(buttons.length, 2, 'one button on the done screen, one on the Completed tab');
   assert.match(rep, /js\/vendor\/jspdf\.umd\.min\.js/, 'jsPDF comes from js/vendor');
   assert.doesNotMatch(rep, /https?:\/\/[^"'\s]*jspdf/i, 'never from a CDN');
-  assert.match(rep, /images\/cb-logo\.jpg/, 'the C&B logo sits in the footer');
+  assert.match(rep, /images\/cb-logo\.png/, 'the C&B logo is loaded for the header');
+  assert.match(rep, /whiteLogo/, 'the dark artwork is recoloured white at runtime');
+  assert.doesNotMatch(rep, /Implemented by/i, 'no "Implemented by" text anywhere in the PDF');
   assert.match(rep, /Page ' \+ p \+ ' of ' \+ pages/, 'every page is numbered');
   assert.match(rep, /MPS_Silks_Checklist_/, 'the filename carries staff + date');
 });
 
-test('C&B logo: mapped as images/cb-logo.jpg, format detected from the data URL', () => {
+test('C&B logo: mapped as images/cb-logo.png, format detected from the data URL', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const ROOT = path.join(__dirname, '..');
-  // The file exists under exactly one name, and it really is a JPEG.
+  // The file exists under exactly one name, is really PNG, and HAS an alpha
+  // channel (colour type 6 = RGBA or 4 = grey+alpha) so it can sit on both
+  // light and dark surfaces.
   const imgs = fs.readdirSync(path.join(ROOT, 'images')).filter((f) => /^cb-logo/i.test(f));
-  assert.deepStrictEqual(imgs, ['cb-logo.jpg'],
-    'exactly one C&B logo file, named cb-logo.jpg (no .png / no duplicates)');
-  const head = fs.readFileSync(path.join(ROOT, 'images', 'cb-logo.jpg'));
-  assert.strictEqual(head.slice(0, 3).toString('hex'), 'ffd8ff', 'the logo is really JPEG data');
+  assert.deepStrictEqual(imgs, ['cb-logo.png'],
+    'exactly one C&B logo file, named cb-logo.png (no .jpg / no duplicates)');
+  const head = fs.readFileSync(path.join(ROOT, 'images', 'cb-logo.png'));
+  assert.strictEqual(head.slice(0, 8).toString('hex'), '89504e470d0a1a0a', 'the logo is really PNG data');
+  const colourType = head[25];   // byte 25 of a PNG: colour type in the IHDR chunk
+  assert.ok(colourType === 6 || colourType === 4,
+    'the logo must carry an alpha channel (got colour type ' + colourType + ')');
   // No stale reference to the old name may remain anywhere.
   const walk = (dir) => fs.readdirSync(dir).flatMap((e) => {
     const full = path.join(dir, e);
@@ -140,16 +147,42 @@ test('C&B logo: mapped as images/cb-logo.jpg, format detected from the data URL'
     }
     return /\.(html|js|css|md|gs|json|yml)$/.test(e) ? [full] : [];
   });
-  const stale = walk(ROOT).filter((f) => /cb-logo\.png/.test(fs.readFileSync(f, 'utf8')));
+  const stale = walk(ROOT).filter((f) => /cb-logo\.jpg/.test(fs.readFileSync(f, 'utf8')));
   assert.deepStrictEqual(stale.map((f) => path.relative(ROOT, f)), [],
-    'no cb-logo.png reference may survive the rename');
-  // jsPDF format comes from the loaded data URL — never hardcoded for logos.
+    'no cb-logo.jpg reference may survive the switch to PNG');
+  // jsPDF format comes from the loaded data URL — never hardcoded.
   const rep = require('node:fs').readFileSync(path.join(ROOT, 'js', 'report.js'), 'utf8');
-  assert.doesNotMatch(rep, /addImage\([^)]*'PNG'/, 'no addImage call hardcodes PNG');
+  assert.doesNotMatch(rep, /addImage\([^)]*'(PNG|JPEG)'/, 'no addImage call hardcodes a format');
+  assert.strictEqual(R.imgFormat('data:image/png;base64,iVBOR'), 'PNG');
   assert.strictEqual(R.imgFormat('data:image/jpeg;base64,/9j/4AA='), 'JPEG');
   assert.strictEqual(R.imgFormat('data:image/jpg;base64,/9j/4AA='), 'JPEG');
-  assert.strictEqual(R.imgFormat('data:image/png;base64,iVBOR'), 'PNG');
   assert.strictEqual(R.imgFormat('data:image/webp;base64,UklG'), null, 'unsupported type → skip');
   assert.strictEqual(R.imgFormat(''), null);
   assert.strictEqual(R.imgFormat(null), null);
+});
+
+test('PDF header: C&B logo goes top-right, white, aspect-true, and never under the title', () => {
+  const rep = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'js', 'report.js'), 'utf8');
+  // The logo is placed from the RIGHT edge with the same margin as the left.
+  assert.match(rep, /cbRight - cbW/, 'the C&B logo is anchored to the right margin');
+  assert.match(rep, /var cbRight = W - MR;/, 'its right margin equals the left margin (MR === ML)');
+  assert.match(rep, /cbH \* dims\.width \/ dims\.height/, 'aspect ratio comes from the real pixels');
+  assert.match(rep, /cbRight -= \(cbW \+ 6\)/, 'the title may not reach the logo');
+  assert.match(rep, /getTextWidth\(title\) > \(cbRight - tx\)/, 'the title shrinks instead of overlapping');
+  // The white version is made at runtime, keeping alpha — not a second file.
+  assert.match(rep, /globalCompositeOperation = 'source-in'/, 'white logo keeps the PNG alpha');
+  assert.match(rep, /fillStyle = '#FFFFFF'/, 'white logo is painted white');
+  assert.match(rep, /toDataURL\('image\/png'\)/, 'white logo is exported as PNG (alpha intact)');
+  // The logo is only ever drawn in the header band, never in the footer loop.
+  const footerLoop = rep.slice(rep.indexOf('footer on EVERY page'));
+  assert.doesNotMatch(footerLoop, /addImage|assets\.cb/, 'the footer loop draws no logo');
+  assert.match(footerLoop, /Page ' \+ p \+ ' of ' \+ pages/, 'the footer keeps staff/date + page number');
+});
+
+test('whiteLogo degrades gracefully when there is no Image/canvas (Node)', async () => {
+  // In Node there is no Image, so it must resolve null rather than throw —
+  // the browser path is exercised by the page itself.
+  const out = await R.whiteLogo('data:image/png;base64,iVBOR');
+  assert.strictEqual(out, null, 'whiteLogo resolves null without a DOM');
+  assert.strictEqual(await R.whiteLogo(null), null, 'whiteLogo(null) is safe');
 });

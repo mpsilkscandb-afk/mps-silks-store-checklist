@@ -7,7 +7,7 @@ audit history from a dashboard — with `.xlsx` / `.csv` export.
 
 - **Frontend:** zero-build static HTML/CSS/JS → deploys to GitHub Pages as-is
 - **Backend:** Google Apps Script (2 files) + Google Sheets as the single source of truth + private Google Drive for photos
-- **Branding:** maroon / gold / cream theme with the MPS logo; a small “Implemented by Consulting & Beyond” credit sits at the bottom of every page (the only third-party mark, and it is text + an optional logo image that hides itself if the file is missing)
+- **Branding:** maroon / gold / cream theme with the MPS logo; a small Consulting & Beyond logo sits at the bottom of every page (the only third-party mark — a transparent PNG that hides itself if the file is missing)
 - **This repository contains no BSC data, no real PINs, no spreadsheet IDs and no secrets.**
 
 > ⚠️ Nothing in this project has been deployed. All commands below are local.
@@ -88,8 +88,8 @@ mps-silks-store-checklist/
 │   ├── vendor/           # vendored third-party (jspdf.umd.min.js) — never a CDN
 │   └── xlsx.js           # zero-dependency .xlsx/.csv writer
 ├── images/mps-logo.png   # MPS logo
-├── images/cb-logo.jpg    # Consulting & Beyond logo (footer + PDF); optional —
-│                         # every use hides itself if the file is absent
+├── images/cb-logo.png    # Consulting & Beyond logo (page footer + PDF header);
+│                         # optional — every use hides itself if the file is absent
 ├── backend/
 │   ├── mps-core.gs       # pure logic (validated by the Node test suite)
 │   ├── MPS_BACKEND.gs    # Apps Script IO: routing, sessions, sheets, photos
@@ -124,13 +124,15 @@ mps-silks-store-checklist/
   implemented in-repo. The one devDependency (`jspdf`) exists only so `js/vendor/jspdf.umd.min.js`
   can be refreshed from `node_modules`; the site itself loads that single vendored file (never a CDN).
   Node is used only for lint/test/build.
-- **Logos:** `images/mps-logo.png` is the MPS brand; `images/cb-logo.jpg` is the Consulting & Beyond
-  credit shown in the shared page footer and in the PDF footer. To replace the C&B logo, drop a new
-  **JPEG** at exactly `images/cb-logo.jpg` (JPEG, ideally ≤ 150 KB, roughly 4× width-to-height) — no
-  code change needed; the PDF reads the image format from the loaded file, and the footer keeps its
-  pixels untouched (it is embedded as-is, never re-encoded). If the file is missing, the footer still
-  shows the text “Consulting & Beyond” and the image simply hides itself (`onerror`), so a missing
-  file never shows a broken icon.
+- **Logos:** `images/mps-logo.png` is the MPS brand; `images/cb-logo.png` is the Consulting & Beyond
+  credit shown in the shared page footer and in the PDF header. To replace the C&B logo, drop a new
+  **transparent PNG** (alpha channel, ideally ≤ 150 KB, roughly 4× width-to-height) at exactly
+  `images/cb-logo.png` — no code change needed. The artwork is dark grey, so it is shown as-is on the
+  light pages and turned white where the background is dark: in CSS with `.cb-logo--onDark`
+  (`filter: brightness(0) invert(1)`) on the maroon login page, and in the PDF by recolouring the same
+  PNG white at runtime on a canvas (`globalCompositeOperation = 'source-in'`) — one file, never two.
+  If the file is missing, every use hides itself (`onerror`), so a missing file never shows a broken
+  icon or a placeholder.
 - **PDF report:** staff press “Download PDF report” on the Completed tab or the success screen.
   The report is assembled in the browser from the checklist data already on the device and rendered
   with the vendored jsPDF; photos are fetched through the same private `getPhoto` endpoint (3 at a
