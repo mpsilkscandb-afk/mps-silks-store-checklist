@@ -16,11 +16,26 @@
   .ph-filter label { font-size: 12px; font-weight: 700; color: var(--ink-60); display: flex; align-items: center; gap: 6px; }
   .ph-filter input[type=date] { padding: 7px 8px; border: 1.5px solid var(--border); border-radius: var(--r-sm); background: var(--paper); font-size: 13px; }
   .ph-info { font-size: 12px; color: var(--ink-60); margin-bottom: 10px; }
+  .ph-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+  .ph-chip {
+    padding: 6px 13px; border-radius: 16px; font-size: 11.5px; font-weight: 700;
+    background: var(--paper); color: var(--ink-60); border: 1.5px solid var(--border-strong);
+    transition: background .12s;
+  }
+  .ph-chip.on { background: var(--maroon-l); color: var(--maroon); border-color: var(--maroon); }
+  .ph-sec-head {
+    grid-column: 1 / -1;
+    font-family: var(--font-head); font-size: 15.5px; color: var(--maroon);
+    margin-top: 8px; padding-bottom: 5px; border-bottom: 1.5px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ph-sec-n { font-family: var(--font-body); font-size: 10.5px; font-weight: 700; background: var(--ink-10); color: var(--ink-60); border-radius: 10px; padding: 1px 8px; }
   .ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
   .ph-card { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); padding: 10px; }
   .ph-card .ph-date { font-size: 11px; font-weight: 700; color: var(--maroon); }
   .ph-card .ph-task { font-size: 13px; font-weight: 700; margin: 3px 0; }
-  .ph-card .ph-meta { font-size: 11px; color: var(--ink-60); margin-bottom: 8px; }
+  .ph-card .ph-meta { font-size: 11px; color: var(--ink-60); margin-bottom: 5px; }
+  .ph-card .ph-badge { margin: 6px 0 8px; }
   .ph-card .ph-view { width: 100%; min-height: 90px; display: flex; align-items: center; justify-content: center; background: var(--ivory); border-radius: var(--r-sm); font-size: 12px; font-weight: 700; color: var(--maroon); cursor: pointer; text-align: center; }
   .ph-card .ph-view img { width: 100%; border-radius: var(--r-sm); display: block; }
   .panel-head h2 { font-family: var(--font-head); font-size: 19px; color: var(--maroon); }
@@ -117,6 +132,7 @@
     <button class="btn sm ghost" data-phq="29">Last 30 days</button>
   </div>
   <div id="phInfo" class="ph-info"></div>
+  <div id="phChips" class="ph-chips"></div>
   <div id="phGrid" class="ph-grid"></div>
 </div>
 
@@ -133,6 +149,12 @@
     </div>
     <button class="btn" onclick="saveSettings()">&#10003; Save Settings</button>
   </div>
+</div>
+
+<div class="cb-footer">
+  <span class="cb-lbl">Implemented by</span>
+  <img src="images/cb-logo.jpg" alt="Consulting &amp; Beyond" onerror="this.style.display='none'"/>
+  <div class="cb-name">Consulting &amp; Beyond</div>
 </div>
 
 <!-- TASK DRAWER -->
@@ -225,41 +247,106 @@ document.querySelectorAll('[data-tabbtn]').forEach(function (b) {
 });
 
 // ── photos gallery (all days, not just today) ─────────────────
+// Date range on top; below it one filter chip per section ("All (n)" +
+// "Store Opening (12)"). "All" groups the grid under section headings;
+// a section chip shows only that section. The chosen chip survives a
+// date-range change as long as the section still has photos.
 var phLoaded = false;
+var phPhotos = [];      // last response (already newest-first)
+var phSelected = '';    // '' = All
 function phSetRange(daysBack) {
   var today = window.Dates.today();
   document.getElementById('phTo').value = today;
   document.getElementById('phFrom').value = window.Dates.addDays(today, -daysBack);
 }
+function phSectionOf(ph) { return String(ph.section || '').trim() || 'General'; }
+// Unique sections, biggest photo count first (ties by name).
+function phSections(list) {
+  var counts = {};
+  list.forEach(function (p) { var s = phSectionOf(p); counts[s] = (counts[s] || 0) + 1; });
+  return Object.keys(counts).sort(function (a, b) {
+    return counts[b] - counts[a] || a.localeCompare(b);
+  });
+}
 function loadPhotos() {
   var from = document.getElementById('phFrom').value;
   var to = document.getElementById('phTo').value;
   var info = document.getElementById('phInfo');
-  var grid = document.getElementById('phGrid');
   info.textContent = 'Loading photos...';
-  grid.innerHTML = '';
+  document.getElementById('phChips').innerHTML = '';
+  document.getElementById('phGrid').innerHTML = '';
   window.MPS_API.get('getPhotos', { dateFrom: from, dateTo: to }).then(function (r) {
     if (!r.ok) { info.textContent = r.error || 'Could not load photos.'; return; }
     phLoaded = true;
+    phPhotos = r.photos || [];
     info.textContent = r.total + ' photo' + (r.total === 1 ? '' : 's') + ' from ' + r.dateFrom + ' to ' + r.dateTo
-      + (r.truncated ? ' (showing the newest ' + r.photos.length + ' — narrow the dates to see the rest)' : '')
+      + (r.truncated ? ' (showing the newest ' + phPhotos.length + ' — narrow the dates to see the rest)' : '')
       + '. Tap a photo box to load it.';
-    if (!r.photos.length) { grid.innerHTML = '<div class="empty">No photos in this date range.</div>'; return; }
-    r.photos.forEach(function (ph) {
-      var card = document.createElement('div');
-      card.className = 'ph-card';
-      var taken = ph.photoTime
-        ? '&#128247; Taken ' + window.UI.esc(ph.photoTime.slice(0, 10)) + ' ' + window.UI.esc(ph.photoTime.slice(11, 19))
-        : '&#128247; Taken time not recorded';
-      card.innerHTML = '<div class="ph-date">' + taken + '</div>'
-        + (ph.photoCount > 1 ? '<div class="ph-meta">Photo ' + window.UI.esc(ph.photoIndex) + ' of ' + window.UI.esc(ph.photoCount) + '</div>' : '')
-        + '<div class="ph-meta">Submitted ' + window.UI.esc(ph.date) + ' ' + window.UI.esc(String(ph.timestamp).slice(11, 19)) + '</div>'
-        + '<div class="ph-task">' + window.UI.esc(ph.taskName || ph.taskId) + '</div>'
-        + '<div class="ph-meta">' + window.UI.esc(ph.staffName) + (ph.section ? ' · ' + window.UI.esc(ph.section) : '')
-        + (ph.status ? ' · ' + window.UI.esc(ph.status) : '') + '</div>'
-        + '<div class="ph-view" data-file="' + window.UI.esc(ph.photoRef) + '">&#128247; Tap to load photo</div>';
-      grid.appendChild(card);
-    });
+    // keep the selected chip when its section still exists in the new range
+    if (phSelected && phSections(phPhotos).indexOf(phSelected) === -1) phSelected = '';
+    renderPhChips();
+    renderPhotos();
+  });
+}
+function renderPhChips() {
+  var el = document.getElementById('phChips');
+  var counts = phSections(phPhotos);
+  var html = '<button class="ph-chip' + (phSelected ? '' : ' on') + '" data-phsec="">All (' + phPhotos.length + ')</button>';
+  counts.forEach(function (s) {
+    var n = 0;
+    phPhotos.forEach(function (p) { if (phSectionOf(p) === s) n++; });
+    html += '<button class="ph-chip' + (phSelected === s ? ' on' : '') + '" data-phsec="' + window.UI.esc(s) + '">'
+      + window.UI.esc(s) + ' (' + n + ')</button>';
+  });
+  el.innerHTML = html;
+}
+document.getElementById('phChips').addEventListener('click', function (e) {
+  var chip = e.target.closest('.ph-chip');
+  if (!chip) return;
+  phSelected = chip.getAttribute('data-phsec') || '';
+  renderPhChips();
+  renderPhotos();
+});
+function phStatusBadge(st) {
+  var s = String(st || '').toUpperCase();
+  if (s === 'FAIL') return '<span class="badge red">Failed</span>';
+  if (s === 'OK' || s === 'PASS') return '<span class="badge green">OK</span>';
+  if (!s) return '<span class="badge">Not rated</span>';
+  return '<span class="badge amber">' + window.UI.esc(s) + '</span>';
+}
+function phCard(ph) {
+  var card = document.createElement('div');
+  card.className = 'ph-card';
+  var takenTxt = ph.photoTime ? window.Dates.pretty(ph.photoTime) : '';
+  var taken = takenTxt ? 'Photo taken: ' + takenTxt : 'Photo time not recorded';
+  var submittedTxt = ph.timestamp ? window.Dates.pretty(ph.timestamp) : (ph.date || '');
+  card.innerHTML = '<div class="ph-task">' + window.UI.esc(ph.taskName || ph.taskId) + '</div>'
+    + '<div class="ph-meta">' + window.UI.esc(ph.staffName || 'Unknown') + (ph.section ? ' · ' + window.UI.esc(ph.section) : '') + '</div>'
+    + '<div class="ph-date">' + window.UI.esc(taken) + '</div>'
+    + '<div class="ph-meta">Submitted ' + window.UI.esc(submittedTxt) + '</div>'
+    + '<div class="ph-meta">Photo ' + window.UI.esc(ph.photoIndex) + ' of ' + window.UI.esc(ph.photoCount) + '</div>'
+    + '<div class="ph-badge">' + phStatusBadge(ph.status) + '</div>'
+    + '<div class="ph-view" data-file="' + window.UI.esc(ph.photoRef) + '">&#128247; Tap to load photo</div>';
+  return card;
+}
+function renderPhotos() {
+  var grid = document.getElementById('phGrid');
+  grid.innerHTML = '';
+  if (!phPhotos.length) { grid.innerHTML = '<div class="empty">No photos in this date range.</div>'; return; }
+  if (phSelected) {
+    // one section → flat grid; listPhotos already returned newest photo first
+    phPhotos.forEach(function (ph) { if (phSectionOf(ph) === phSelected) grid.appendChild(phCard(ph)); });
+    return;
+  }
+  // "All" → grouped under section headings with counts (newest photo first)
+  phSections(phPhotos).forEach(function (sec) {
+    var head = document.createElement('div');
+    head.className = 'ph-sec-head';
+    var n = 0;
+    phPhotos.forEach(function (p) { if (phSectionOf(p) === sec) n++; });
+    head.innerHTML = window.UI.esc(sec) + ' <span class="ph-sec-n">' + n + '</span>';
+    grid.appendChild(head);
+    phPhotos.forEach(function (ph) { if (phSectionOf(ph) === sec) grid.appendChild(phCard(ph)); });
   });
 }
 document.getElementById('phShow').addEventListener('click', loadPhotos);

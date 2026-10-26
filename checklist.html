@@ -18,7 +18,7 @@
   .pfill { height: 100%; border-radius: 3px; background: var(--gold); transition: width .3s; width: 0; }
   .pfill.full { background: var(--green); }
 
-  .tab-panel { display: none; padding: 12px 14px 120px; max-width: 660px; margin: 0 auto; }
+  .tab-panel { display: none; padding: 12px 14px 12px; max-width: 660px; margin: 0 auto; }
   .tab-panel.active { display: block; }
 
   .sec-acc { margin-bottom: 10px; background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); overflow: hidden; box-shadow: var(--shadow); }
@@ -108,6 +108,8 @@
 
   #pg-done { display: none; position: fixed; inset: 0; background: var(--cream); z-index: 400; align-items: center; justify-content: center; }
   #pg-done.active { display: flex; }
+  .pdf-btn { background: var(--paper); color: var(--maroon); border: 1.5px solid var(--gold); }
+  .pdf-btn:disabled { opacity: .45; cursor: not-allowed; }
   .done-body { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 32px; gap: 10px; }
   .done-body .ring {
     width: 84px; height: 84px; border-radius: 50%;
@@ -152,7 +154,16 @@
 </div>
 
 <div class="tab-panel active" id="panel-pending"><div id="pendingBody"></div></div>
-<div class="tab-panel" id="panel-completed"><div id="completedBody"></div></div>
+<div class="tab-panel" id="panel-completed">
+  <button class="btn pdf-btn" style="width:100%;margin-bottom:10px" id="tabPdfBtn" onclick="downloadPdf(this)">&#128196; Download PDF report (today)</button>
+  <div id="completedBody"></div>
+</div>
+
+<div class="cb-footer" style="margin-bottom:110px">
+  <span class="cb-lbl">Implemented by</span>
+  <img src="images/cb-logo.jpg" alt="Consulting &amp; Beyond" onerror="this.style.display='none'"/>
+  <div class="cb-name">Consulting &amp; Beyond</div>
+</div>
 
 <div class="sub-wrap">
   <div class="vmsg" id="vmsg"></div>
@@ -168,7 +179,8 @@
     <h2>Submitted!</h2>
     <p id="doneMsg">Your checklist has been saved.</p>
     <p id="doneTime" style="font-size:12px;color:var(--ink-30)"></p>
-    <button class="btn" style="margin-top:12px" onclick="location.reload()">Back to Checklist</button>
+    <button class="btn pdf-btn" style="margin-top:12px" id="donePdfBtn" onclick="downloadPdf(this)">&#128196; Download PDF report</button>
+    <button class="btn" style="margin-top:8px" onclick="location.reload()">Back to Checklist</button>
   </div>
 </div>
 
@@ -179,7 +191,9 @@
 <script src="js/auth.js"></script>
 <script src="js/api.js"></script>
 <script src="js/dates.js"></script>
+<script src="js/exif.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/report.js"></script>
 <script>
 (function () {
 'use strict';
@@ -632,23 +646,28 @@ function pickPhoto(id, kind, isEdit) {
   input.value = '';
   input.onchange = function () {
     if (!input.files || !input.files[0]) return;
-    var takenAt = window.Dates.now().date + ' ' + window.Dates.now().time;   // this photo's own capture time
+    var file = input.files[0];
     window.UI.toast('Processing photo...');
-    window.UI.compressImage(input.files[0], CFG.photo).then(function (dataUrl) {
-      var a = getAns(id);
-      if (photoTotal(a) >= maxPhotos()) { window.UI.toast('A task can have at most 5 photos.', 'err'); return; }
-      a.photos = a.photos || [];
-      a.photos.push({ p: dataUrl, t: takenAt, uploadedId: '' });
-      a._needPhoto = false;
-      if (!isEdit) {
-        dpPut(id, toDraftPhotos(a.photos));
-        var t = findTask(id);
-        if (t && t.type === 'photo') { a.v = 'Photo'; a._status = 'OK'; }
-        var cardEl = document.getElementById('tc_' + id + '_pending');
-        if (cardEl) cardEl.className = 'tc ok';
-        autosave(); updateProg();
-      } else markUr(id);
-      renderPhotoArea(id, isEdit);
+    // The capture time comes from the ORIGINAL file (EXIF DateTimeOriginal →
+    // file.lastModified → now) BEFORE compressImage() redraws it, because
+    // canvas compression strips EXIF. Each photo keeps its own time.
+    window.UI.getPhotoTakenAt(file).then(function (takenAt) {
+      return window.UI.compressImage(file, CFG.photo).then(function (dataUrl) {
+        var a = getAns(id);
+        if (photoTotal(a) >= maxPhotos()) { window.UI.toast('A task can have at most 5 photos.', 'err'); return; }
+        a.photos = a.photos || [];
+        a.photos.push({ p: dataUrl, t: takenAt, uploadedId: '' });
+        a._needPhoto = false;
+        if (!isEdit) {
+          dpPut(id, toDraftPhotos(a.photos));
+          var t = findTask(id);
+          if (t && t.type === 'photo') { a.v = 'Photo'; a._status = 'OK'; }
+          var cardEl = document.getElementById('tc_' + id + '_pending');
+          if (cardEl) cardEl.className = 'tc ok';
+          autosave(); updateProg();
+        } else markUr(id);
+        renderPhotoArea(id, isEdit);
+      });
     }).catch(function (err) { window.UI.toast(err.message, 'err'); });
   };
   input.click();
@@ -888,6 +907,65 @@ function submitEntries(entries, btn) {
     document.getElementById('doneMsg').textContent = me.name + ' — your checklist was saved.';
     document.getElementById('doneTime').textContent = window.Dates.formatFull(r.date || window.Dates.today()) + ' at ' + (r.timestamp || '').slice(11) + ' IST';
     document.getElementById('pg-done').classList.add('active');
+  });
+}
+
+// ── PDF report ────────────────────────────────────────────────
+// Turns the in-memory answers (server-confirmed ones only) into the same
+// shape getChecklist returns, so MPSReport.buildReportData stays pure.
+function reportPayload() {
+  return {
+    ok: true,
+    date: today,
+    name: me.name,
+    role: me.role,
+    store: { name: CFG.storeName || 'MPS Silks', location: CFG.storeLocation || '' },
+    sections: secs.map(function (s) {
+      return {
+        section: s.section,
+        tasks: s.tasks.map(function (t) {
+          var a = ans[t.taskId] || {};
+          var sp = a.serverPhotos || [];
+          var submitted = !!t.submitted || !!a._done;
+          return {
+            taskId: t.taskId,
+            taskName: t.taskName,
+            type: t.type,
+            mandatory: t.mandatory,
+            photoRequired: t.photoRequired,
+            submitted: submitted,
+            submittedStatus: submitted ? {
+              response: a.v || (t.submittedStatus && t.submittedStatus.response) || '',
+              status: a._status || (t.submittedStatus && t.submittedStatus.status) || 'OK',
+              remarks: a.r || (t.submittedStatus && t.submittedStatus.remarks) || '',
+              photoRef: sp.length ? sp.map(function (ph) { return ph.id; }).join(',')
+                : (t.submittedStatus && t.submittedStatus.photoRef) || '',
+              photoTime: sp.length ? sp.map(function (ph) { return ph.t || ''; }).join(',')
+                : (t.submittedStatus && t.submittedStatus.photoTime) || '',
+              timestamp: a._ts || (t.submittedStatus && t.submittedStatus.timestamp) || ''
+            } : null
+          };
+        })
+      };
+    })
+  };
+}
+
+window.downloadPdf = downloadPdf;
+function downloadPdf(btn) {
+  var data = window.MPSReport.buildReportData(reportPayload(), { name: me.name, role: me.role }, Date.now());
+  if (!data.summary.total) { window.UI.toast('Nothing to report yet.', 'err'); return; }
+  var original = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing PDF...'; }
+  window.MPSReport.downloadReport(data, {
+    photoLoader: function (fileId) { return window.MPS_API.photoUrl(fileId); },
+    onProgress: function (msg) { if (btn) btn.textContent = msg || 'Preparing PDF...'; }
+  }).then(function (name) {
+    window.UI.toast('PDF saved: ' + name, 'ok');
+  }).catch(function (e) {
+    window.UI.toast(e && e.message ? e.message : 'The PDF could not be created.', 'err');
+  }).then(function () {
+    if (btn) { btn.disabled = false; btn.innerHTML = original; }
   });
 }
 

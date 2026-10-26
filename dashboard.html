@@ -135,6 +135,12 @@
     <div id="staffWrap"></div>
     <div id="trendWrap"></div>
     <div id="updatesWrap"></div>
+
+    <div class="cb-footer">
+      <span class="cb-lbl">Implemented by</span>
+      <img src="images/cb-logo.jpg" alt="Consulting &amp; Beyond" onerror="this.style.display='none'"/>
+      <div class="cb-name">Consulting &amp; Beyond</div>
+    </div>
   </div>
 </div>
 
@@ -282,7 +288,7 @@ function renderFailed() {
     html += '<div class="fail-card">'
       + '<div class="fail-top"><div class="fail-task">' + window.UI.esc(t.taskName) + '</div>'
       + '<span class="badge maroon">' + window.UI.esc(t.section) + '</span></div>'
-      + (t.staffName ? '<div class="fail-who">' + window.UI.esc(t.staffName) + (t.timestamp ? ' · ' + window.UI.esc(String(t.timestamp).slice(11, 16)) : '') + '</div>' : '')
+      + (t.staffName ? '<div class="fail-who">' + window.UI.esc(t.staffName) + (t.timestamp ? ' · Submitted ' + window.UI.esc(window.Dates.pretty(t.timestamp) || String(t.timestamp).slice(11, 16)) : '') + '</div>' : '')
       + (t.remarks ? '<div class="fail-remark">&#128172; ' + window.UI.esc(t.remarks) + '</div>' : '')
       + photoThumbs(t)
       + '</div>';
@@ -299,7 +305,13 @@ function photoThumbs(t) {
     var label = ids.length > 1 ? 'Photo ' + (i + 1) : 'View photo';
     html += '<div class="thumb" data-file="' + window.UI.esc(id) + '" onclick="openPhoto(this.getAttribute(\'data-file\'))">' + label + '</div>';
   });
-  return html + '</div>';
+  html += '</div>';
+  // Capture time of the first photo, or a clear "not recorded" notice.
+  var pt = String(t.photoTime || '').split(',')[0].trim();
+  var pretty = pt ? window.Dates.pretty(pt) : '';
+  html += '<div style="font-size:11px;color:var(--ink-60);margin-top:5px">'
+    + window.UI.esc(pretty ? 'Photo taken: ' + pretty : 'Photo time not recorded') + '</div>';
+  return html;
 }
 // How many photos a row carries (photoRef is a ","-list; photoCount is the
 // backend's own count when it sends one).

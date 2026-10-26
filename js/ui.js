@@ -65,6 +65,35 @@
 
   function scoreClass(pct) { return pct >= 80 ? 'g' : pct >= 50 ? 'a' : 'r'; }
 
+  // ── photo capture time ───────────────────────────────────────
+  // Pure fallback order: EXIF string → file.lastModified → now.
+  // EXIF has no time zone, so its value is already the phone's local
+  // (= store) wall-clock time; lastModified/current time are instants and
+  // are converted to IST through Dates.fromMs(). Returns 'YYYY-MM-DD HH:MM:SS'.
+  function photoTakenAtFrom(exifStr, lastModifiedMs, nowMs) {
+    var exif = typeof exifStr === 'string' ? exifStr.trim() : '';
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(exif)) return exif;
+    var ms = (typeof lastModifiedMs === 'number' && isFinite(lastModifiedMs) && lastModifiedMs > 0)
+      ? lastModifiedMs
+      : ((typeof nowMs === 'number' && isFinite(nowMs)) ? nowMs : Date.now());
+    var p = global.Dates && global.Dates.fromMs ? global.Dates.fromMs(ms) : null;
+    return p ? p.date + ' ' + p.time : '';
+  }
+
+  // The moment the photo was actually taken (must be read from the ORIGINAL
+  // File — canvas re-compression strips EXIF).
+  function getPhotoTakenAt(file) {
+    var exifRead = (global.EXIF && global.EXIF.readFileDateTime)
+      ? global.EXIF.readFileDateTime(file)
+      : (typeof Promise !== 'undefined' ? Promise.resolve(null) : null);
+    if (!exifRead) {
+      return Promise.resolve(photoTakenAtFrom(null, file && file.lastModified, Date.now()));
+    }
+    return exifRead.then(function (exifStr) {
+      return photoTakenAtFrom(exifStr, file && file.lastModified, Date.now());
+    });
+  }
+
   // Log out helper shared by all pages.
   function bindLogout(btnId) {
     var b = document.getElementById(btnId);
@@ -87,6 +116,8 @@
     toast: toast,
     uuid: uuid,
     compressImage: compressImage,
+    photoTakenAtFrom: photoTakenAtFrom,
+    getPhotoTakenAt: getPhotoTakenAt,
     scoreClass: scoreClass,
     bindLogout: bindLogout,
     fillIdentity: fillIdentity

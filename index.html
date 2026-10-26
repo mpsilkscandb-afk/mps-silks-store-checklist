@@ -16,9 +16,9 @@
       radial-gradient(1100px 500px at 50% -120px, rgba(201, 162, 39, .22), transparent 62%),
       linear-gradient(180deg, var(--maroon-dark) 0%, var(--maroon-deep) 100%);
     display: flex; align-items: center; justify-content: center;
-    overflow: hidden;
+    overflow-x: hidden; overflow-y: auto;
   }
-  .wrap { display: flex; flex-direction: column; align-items: center; width: 100%; padding: 20px; }
+  .wrap { display: flex; flex-direction: column; align-items: center; width: 100%; padding: 20px; margin: auto; }
   .logo-chip {
     width: 104px; height: 104px;
     background: var(--cream);
@@ -59,7 +59,7 @@
   .loader.show { display: flex; }
   .loader .spinner { border-color: rgba(229, 199, 107, .25); border-top-color: var(--gold-light); }
   .load-txt { font-size: 12.5px; color: rgba(255, 248, 231, .6); }
-  .foot { position: fixed; bottom: 16px; font-size: 10px; color: rgba(255, 248, 231, .3); letter-spacing: .08em; }
+  .foot { font-size: 10px; color: var(--ink-30); letter-spacing: .08em; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -90,8 +90,14 @@
     <div class="spinner"></div>
     <div class="load-txt" id="loadTxt">Verifying...</div>
   </div>
+
+  <div class="cb-footer">
+    <span class="cb-lbl">Implemented by</span>
+    <img src="images/cb-logo.jpg" alt="Consulting &amp; Beyond" onerror="this.style.display='none'"/>
+    <div class="cb-name">Consulting &amp; Beyond</div>
+  </div>
+  <div class="foot">MPS SILKS &middot; KGF</div>
 </div>
-<div class="foot">MPS SILKS &middot; KGF</div>
 
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>

@@ -792,10 +792,16 @@ function actionSubmitChecklist(p, fromGet) {
     var sheet = sheet_('Submissions');
     ensureHeaders_('Submissions', SUB_HEADERS_);
     var col = MPSCore.mapColumns(readMatrix_('Submissions').headers, 'sub');
+    // Timestamp and Photo_Time must stay PLAIN TEXT (number format "@") — for
+    // NEW sheets and for EXISTING ones. Sheets otherwise converts a lone
+    // "2026-10-26 14:03:11" into a Date object, which reads back as
+    // "Mon Oct 26 2026 14:03:11 GMT+0530 …" and shows up as garbage in the UI.
+    // Runs inside the same lock as the write and is a no-op when already set.
+    forceTextColumns_(sheet, [col.timestamp, col.photoTime]);
 
     var rows = v.clean.map(function (c) {
       var row = new Array(SUB_HEADERS_.length).fill('');
-      row[col.timestamp !== undefined ? col.timestamp : 0] = ts;
+      row[col.timestamp !== undefined ? col.timestamp : 0] = String(ts);
       row[col.date !== undefined ? col.date : 1] = today;
       row[col.staffName !== undefined ? col.staffName : 2] = sess.name;
       row[col.role !== undefined ? col.role : 3] = sess.role;
@@ -810,7 +816,7 @@ function actionSubmitChecklist(p, fromGet) {
       row[col.sequence !== undefined ? col.sequence : 12] = todayIds[c.taskId] ? 'Update' : 'First';
       row[col.updateReason !== undefined ? col.updateReason : 13] = c.updateReason;
       row[col.submissionId !== undefined ? col.submissionId : 14] = batchId;
-      row[col.photoTime !== undefined ? col.photoTime : 15] = c.photoTime || '';
+      row[col.photoTime !== undefined ? col.photoTime : 15] = String(c.photoTime || '');
       return row;
     });
     if (rows.length) {
@@ -853,6 +859,24 @@ function ensureHeaders_(sheetName, wanted) {
     }
   });
   if (changed) sheet.getRange(1, 1, 1, next.length).setValues([next]);
+}
+
+// Force whole columns to the plain-text number format "@" so Sheets never
+// re-interprets written strings as dates/numbers. Takes 0-based column
+// indexes; missing indexes are skipped. Idempotent: the format is only
+// written when the column is not already text, so it is cheap on every run.
+function forceTextColumns_(sheet, idxs) {
+  (idxs || []).forEach(function (idx) {
+    if (idx === undefined || idx === null || idx < 0) return;
+    try {
+      var range = sheet.getRange(1, idx + 1, sheet.getMaxRows(), 1);
+      if (range.getNumberFormat() === '@') return;
+      range.setNumberFormat('@');
+    } catch (e) {
+      // Non-fatal: the values are still written as strings; log without secrets.
+      console.error('Could not set text format on column ' + (idx + 1) + ': ' + e.message);
+    }
+  });
 }
 
 // ── photos ─────────────────────────────────────────────────────
@@ -934,8 +958,10 @@ function actionGetPhotos(p) {
   dateFrom = days[0]; dateTo = days[days.length - 1];
   var m = readMatrix_('Submissions');
   var subs = MPSCore.normalizeSubmissions(m.headers, m.rows);
-  var res = MPSCore.listPhotos(subs, dateFrom, dateTo, 200);
-  return { ok: true, dateFrom: dateFrom, dateTo: dateTo, total: res.total, truncated: res.truncated, photos: res.photos };
+  // Optional section filter (admin Photos tab); '' = every section.
+  var section = MPSCore.str(p.section);
+  var res = MPSCore.listPhotos(subs, dateFrom, dateTo, 200, section);
+  return { ok: true, dateFrom: dateFrom, dateTo: dateTo, section: section, total: res.total, truncated: res.truncated, photos: res.photos };
 }
 
 // ── dashboard ──────────────────────────────────────────────────

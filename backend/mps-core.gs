@@ -152,6 +152,29 @@ var MPSCore = (function () {
     return '';
   }
 
+  // ── cell → 'YYYY-MM-DD HH:MM:SS' (IST) ──────────────────────
+  // Google Sheets converts a LONE value like "2026-10-26 14:03:11" written
+  // into a Timestamp / Photo_Time cell into a Date object; String(Date) then
+  // reads back as "Mon Oct 26 2026 14:03:11 GMT+0530 …" (multi-value cells
+  // such as "t1,t2" stay text, which is why the damage looked inconsistent).
+  // This helper turns such a Date back into the store's wall-clock time as
+  // plain text — the instant + 5:30 read via the UTC getters, so it never
+  // depends on the script's own time zone — and passes strings through
+  // untouched, so a comma list keeps its parts index-aligned with the photo
+  // ids. It also repairs rows written BEFORE the columns were typed as text.
+  var IST_OFFSET_MS = 5.5 * 3600000;
+  function cellToIstString(v) {
+    if (v === null || v === undefined) return '';
+    if (v instanceof Date) {
+      var t = v.getTime();
+      if (isNaN(t)) return '';
+      var d = new Date(t + IST_OFFSET_MS);
+      return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()) +
+        ' ' + pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ':' + pad2(d.getUTCSeconds());
+    }
+    return str(v);
+  }
+
   // ── PIN hashing (pure JS SHA-256) ────────────────────────────
   var SHA_K = [
     0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
@@ -401,7 +424,7 @@ var MPSCore = (function () {
     for (var r = 0; r < rows.length; r++) {
       var raw = rows[r];
       if (!raw || raw.every(function (c) { return str(c) === ''; })) continue;
-      var ts = col.timestamp !== undefined ? str(raw[col.timestamp]) : '';
+      var ts = col.timestamp !== undefined ? cellToIstString(raw[col.timestamp]) : '';
       var date = col.date !== undefined ? normDateCell(raw[col.date]) : '';
       if (!date && ts.length >= 10) date = normDateCell(ts.slice(0, 10));
       subs.push({
@@ -416,7 +439,7 @@ var MPSCore = (function () {
         type: col.type !== undefined ? str(raw[col.type]) : '',
         response: col.response !== undefined ? str(raw[col.response]) : '',
         photoRef: col.photoUrl !== undefined ? str(raw[col.photoUrl]) : '',
-        photoTime: col.photoTime !== undefined ? str(raw[col.photoTime]) : '',
+        photoTime: col.photoTime !== undefined ? cellToIstString(raw[col.photoTime]) : '',
         status: col.status !== undefined ? str(raw[col.status]).toUpperCase() : '',
         remarks: col.remarks !== undefined ? str(raw[col.remarks]) : '',
         sequence: col.sequence !== undefined ? str(raw[col.sequence]) : '',
@@ -475,15 +498,17 @@ var MPSCore = (function () {
     return out.join(',');
   }
 
-  // Time a photo was taken, 'YYYY-MM-DD HH:MM:SS' (IST, from the phone). Anything that
-  // is not that format, is in the future (> 5 min) or older than 36 h is dropped ('').
+  // Time a photo was taken, 'YYYY-MM-DD HH:MM:SS' (IST, from the phone). A
+  // value in that format is NEVER dropped silently: it is only discarded when
+  // it is more than 14 days in the past or more than 24 h in the future
+  // (phone clocks are often a little off; gallery photos can be old).
   function cleanPhotoTime(v, nowMs) {
     var s = str(v);
     if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) return '';
     var t = Date.parse(s.replace(' ', 'T') + '+05:30');
     if (isNaN(t)) return '';
     var now = nowMs || Date.now();
-    if (t > now + 5 * 60000 || t < now - 36 * 3600000) return '';
+    if (t > now + 24 * 3600000 || t < now - 14 * 86400000) return '';
     return s;
   }
 
@@ -801,11 +826,15 @@ var MPSCore = (function () {
   // subs: normalized submissions. Never exposes anything but the Drive file id.
   // A row can carry several photos ("id1,id2") — it is expanded into ONE
   // gallery item per id, with that id's own capture time.
-  function listPhotos(subs, dateFrom, dateTo, limit) {
+  // Optional 5th argument: a section name — only that section's photos are
+  // returned (the cap still applies to the filtered result).
+  function listPhotos(subs, dateFrom, dateTo, limit, section) {
     var max = limit > 0 ? limit : 200;
+    var want = section ? str(section) : '';
     var all = [];
     (subs || []).forEach(function (s) {
       if (!s || !s.date || s.date < dateFrom || s.date > dateTo) return;
+      if (want && str(s.section) !== want) return;
       var refs = parsePhotoRefs(s.photoRef);
       if (!refs.length) return;
       var times = str(s.photoTime).split(',');
@@ -853,6 +882,7 @@ var MPSCore = (function () {
     addDays: addDays,
     dayRange: dayRange,
     normDateCell: normDateCell,
+    cellToIstString: cellToIstString,
     sha256Hex: sha256Hex,
     hashPin: hashPin,
     verifyPin: verifyPin,

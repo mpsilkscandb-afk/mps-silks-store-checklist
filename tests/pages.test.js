@@ -33,6 +33,11 @@ test('no BSC branding, endpoints, credentials or data references anywhere in the
       if (fs.statSync(full).isDirectory()) {
         // tests/docs/sheets may legitimately mention BSC as assertions/reference
         if (['node_modules', 'dist', '.git', 'docs', 'sheets', 'tests'].includes(e)) continue;
+        // js/vendor holds THIRD-PARTY library code (jsPDF). It is byte-for-byte
+        // upstream, contains its own words/strings (e.g. "PubSub") that trip
+        // the brand regex above, and is never our branding — skip it. Our own
+        // code under js/ is still fully scanned.
+        if (e === 'vendor') continue;
         out.push(...walk(full));
       } else if (/\.(html|js|gs|css|json|yml)$/.test(e)) out.push(full);
     }
@@ -102,7 +107,10 @@ test('admin task actions exist and are lock-protected', () => {
 });
 
 test('no secrets or admin bypasses are hard-coded in frontend code', () => {
-  const files = PAGES.concat(fs.readdirSync(path.join(ROOT, 'js')).map((f) => 'js/' + f));
+  // js/vendor (third-party jsPDF) is skipped: it is upstream code, not ours.
+  const files = PAGES.concat(fs.readdirSync(path.join(ROOT, 'js'))
+    .filter((f) => fs.statSync(path.join(ROOT, 'js', f)).isFile())
+    .map((f) => 'js/' + f));
   files.forEach((f) => {
     const src = read(f);
     assert.doesNotMatch(src, /ADMIN_PW|adminPassword\s*=\s*['"][^'"]+['"]/, f + ' hard-coded admin password');
@@ -444,8 +452,12 @@ test('core: cleanPhotoTime accepts a recent IST time and drops bad ones', () => 
   const now = Date.parse('2026-10-22T10:00:00+05:30');
   assert.strictEqual(core.cleanPhotoTime('2026-10-22 09:14:05', now), '2026-10-22 09:14:05');
   assert.strictEqual(core.cleanPhotoTime('2026-10-22 10:03:00', now), '2026-10-22 10:03:00', '5 min clock skew is tolerated');
-  assert.strictEqual(core.cleanPhotoTime('2026-10-22 10:30:00', now), '', 'future time dropped');
-  assert.strictEqual(core.cleanPhotoTime('2026-10-19 09:00:00', now), '', 'older than 36 h dropped');
+  assert.strictEqual(core.cleanPhotoTime('2026-10-22 10:30:00', now), '2026-10-22 10:30:00', 'a clock up to 24 h ahead is tolerated');
+  assert.strictEqual(core.cleanPhotoTime('2026-10-23 09:59:00', now), '2026-10-23 09:59:00', 'just inside the 24 h future window');
+  assert.strictEqual(core.cleanPhotoTime('2026-10-23 10:01:00', now), '', 'more than 24 h in the future is dropped');
+  assert.strictEqual(core.cleanPhotoTime('2026-10-19 09:00:00', now), '2026-10-19 09:00:00', 'a 3-day-old gallery photo is kept');
+  assert.strictEqual(core.cleanPhotoTime('2026-10-09 09:00:00', now), '2026-10-09 09:00:00', '13 days old is still inside the 14-day window');
+  assert.strictEqual(core.cleanPhotoTime('2026-10-07 09:00:00', now), '', 'older than 14 days dropped');
   assert.strictEqual(core.cleanPhotoTime('22/10/2026 09:00', now), '', 'wrong format dropped');
   assert.strictEqual(core.cleanPhotoTime('', now), '');
   assert.strictEqual(core.cleanPhotoTime('2026-13-45 99:99:99', now), '', 'impossible date dropped');
@@ -478,7 +490,8 @@ test('photo time flows through the whole app', () => {
   const page = read('checklist.html');
   const api = read('backend/MPS_BACKEND.gs');
   const admin = read('admin.html');
-  assert.match(page, /var takenAt = window\.Dates\.now\(\)\.date/, 'time is captured when the photo is chosen');
+  assert.match(page, /window\.UI\.getPhotoTakenAt\(file\)\.then\(function \(takenAt\)/,
+    'the capture time is read from the ORIGINAL file before compression');
   assert.match(page, /a\.photos\.push\(\{ p: dataUrl, t: takenAt/, 'time is kept with each photo');
   assert.match(page, /photoTime: e\.photoRef \? \(e\.photoTime \|\| ''\) : ''/, 'time is sent with the submission');
   assert.match(page, /return \{ p: ph\.p, t: ph\.t \|\| '' \};/, 'time survives a saved draft');
@@ -486,7 +499,8 @@ test('photo time flows through the whole app', () => {
   assert.match(page, /photoMeta\(a\)/, 'the completed card shows the photo meta line');
   assert.match(api, /'Submission_ID', 'Photo_Time'\]/, 'Photo_Time column is created automatically');
   assert.match(api, /c\.photoTime/, 'photo time is written to the sheet');
-  assert.match(admin, /Taken time not recorded/, 'admin gallery shows the capture time');
+  assert.match(admin, /Photo time not recorded/, 'admin gallery shows a notice when no capture time exists');
+  assert.match(admin, /Photo taken: /, 'admin gallery labels the capture time');
 });
 
 test('task frequency: admin form, backend rules and submit guard are wired', () => {
@@ -497,4 +511,125 @@ test('task frequency: admin form, backend rules and submit guard are wired', () 
   assert.match(api, /tasksForUser\(res\.tasks, sess\.name, sess\.role, today\)/, 'staff checklist only lists tasks due today');
   assert.match(api, /code: 'NOT_DUE'/, 'a task that is not due cannot be submitted');
   assert.match(api, /ensureHeaders_\('Checklist_Config', \['Frequency'\]\)/, 'Frequency header is added when missing');
+});
+
+// -- capture time: EXIF reader + frontend fallback order --------
+// Browser files attach to `window`, so evaluate them against a stub window
+// (same trick as the config.js test above).
+function loadBrowserJs(files) {
+  const win = {};
+  files.forEach((f) => new Function('window', read(f))(win));
+  return win;
+}
+
+// Build a minimal JPEG carrying one APP1/Exif block: IFD0 holds the Exif-IFD
+// pointer (0x8769) and the Exif IFD holds DateTimeOriginal (0x9003, ASCII).
+function makeExifJpeg(dateTimeOriginal) {
+  const tif = [];
+  const put = (arr) => { arr.forEach((b) => tif.push(b & 0xff)); };
+  put([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00]);      // II + 42, IFD0 at 8
+  const exifIfdAt = 10 + 12 * 1 + 4;                           // after IFD0 (1 entry) + next-ptr
+  put([0x01, 0x00]);                                           // IFD0 count = 1
+  put([0x69, 0x87, 0x04, 0x00, 0x01, 0x00, 0x00, 0x00]);       // 0x8769 LONG count 1
+  put([exifIfdAt, 0x00, 0x00, 0x00]);                          //   -> Exif IFD offset
+  put([0x00, 0x00, 0x00, 0x00]);                               // next IFD = none
+  const strOff = exifIfdAt + 2 + 12 + 4;
+  put([0x01, 0x00]);                                           // Exif IFD count = 1
+  put([0x03, 0x90, 0x02, 0x00]);                               // 0x9003 ASCII
+  const s = (dateTimeOriginal + '\x00').split('').map((c) => c.charCodeAt(0));
+  put([s.length, 0x00, 0x00, 0x00]);                           //   count
+  put([strOff, 0x00, 0x00, 0x00]);                             //   -> string offset
+  put([0x00, 0x00, 0x00, 0x00]);                               // next IFD = none
+  while (tif.length < strOff) tif.push(0);
+  put(s);
+  const payload = [].concat([0x45, 0x78, 0x69, 0x66, 0x00, 0x00], tif); // "Exif\0\0"
+  const len = payload.length + 2;
+  return new Uint8Array([].concat([0xFF, 0xD8, 0xFF, 0xE1, len >> 8, len & 0xff], payload));
+}
+
+test('exif.js reads DateTimeOriginal from a JPEG and rejects everything else', () => {
+  const win = loadBrowserJs(['js/exif.js']);
+  assert.strictEqual(win.EXIF.findDateTime(makeExifJpeg('2026:10:26 14:03:11')), '2026-10-26 14:03:11');
+  // PNG / HEIC / garbage � never throw, never guess
+  assert.strictEqual(win.EXIF.findDateTime(new Uint8Array([0x89, 0x50, 0x4e, 0x47])), null, 'a PNG has no EXIF');
+  assert.strictEqual(win.EXIF.findDateTime(new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0x00])), null, 'truncated block');
+  assert.strictEqual(win.EXIF.findDateTime(new Uint8Array(0)), null, 'empty file');
+  assert.strictEqual(win.EXIF.findDateTime(null), null);
+  assert.strictEqual(win.EXIF.findDateTime(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])), null);
+});
+
+test('photo capture time: EXIF first, then file.lastModified, then now', () => {
+  const win = loadBrowserJs(['js/dates.js', 'js/exif.js', 'js/ui.js']);
+  const now = Date.parse('2026-10-26T14:00:00+05:30');
+  const lm = Date.parse('2026-10-25T09:30:00+05:30');
+  assert.strictEqual(win.UI.photoTakenAtFrom('2026-10-26 12:11:10', lm, now), '2026-10-26 12:11:10',
+    'a valid EXIF time always wins');
+  assert.strictEqual(win.UI.photoTakenAtFrom(null, lm, now), '2026-10-25 09:30:00',
+    'no EXIF ? the file\'s lastModified, as IST text');
+  assert.strictEqual(win.UI.photoTakenAtFrom('junk', lm, now), '2026-10-25 09:30:00',
+    'unreadable EXIF is ignored, not trusted');
+  assert.strictEqual(win.UI.photoTakenAtFrom(null, null, now), '2026-10-26 14:00:00',
+    'nothing else available ? the current time');
+  // getPhotoTakenAt wires the EXIF reader in front of the pure helper.
+  win.EXIF.readFileDateTime = () => Promise.resolve('2026-10-26 12:11:10');
+  return win.UI.getPhotoTakenAt({ lastModified: lm }).then((t) => {
+    assert.strictEqual(t, '2026-10-26 12:11:10', 'getPhotoTakenAt uses the EXIF time when present');
+    win.EXIF.readFileDateTime = () => Promise.resolve(null);
+    return win.UI.getPhotoTakenAt({ lastModified: lm });
+  }).then((t) => {
+    assert.strictEqual(t, '2026-10-25 09:30:00', 'no EXIF ? lastModified');
+  });
+});
+
+test('checklist page reads the capture time from the ORIGINAL file before compressing it', () => {
+  const page = read('checklist.html');
+  assert.match(page, /src="js\/exif\.js"/, 'checklist.html loads the EXIF reader');
+  const exifAt = page.indexOf('src="js/exif.js"');
+  const uiAt = page.indexOf('src="js/ui.js"');
+  assert.ok(exifAt !== -1 && uiAt !== -1 && exifAt < uiAt, 'exif.js must load before ui.js');
+  // Only the checklist needs it (photos are taken there).
+  ['index.html', 'dashboard.html', 'admin.html'].forEach((p) =>
+    assert.doesNotMatch(read(p), /js\/exif\.js/, p + ' must not load exif.js'));
+});
+
+test('jsPDF is vendored locally (no CDN) and copied into dist', () => {
+  const vendor = path.join(ROOT, 'js', 'vendor', 'jspdf.umd.min.js');
+  assert.ok(fs.existsSync(vendor), 'js/vendor/jspdf.umd.min.js must exist (copied from node_modules)');
+  assert.ok(fs.statSync(vendor).size > 100000, 'the vendored jsPDF looks truncated');
+  PAGES.concat(['js/report.js', 'js/exif.js']).forEach((f) => {
+    if (!fs.existsSync(path.join(ROOT, f))) return;
+    assert.doesNotMatch(read(f), /https?:\/\/[^"'\s]*jspdf/i, f + ' must not load jsPDF from a CDN');
+  });
+  // js/ is copied recursively, so js/vendor rides along into dist/.
+  assert.match(read('scripts/build.js'), /'js'/, 'build.js copies the whole js folder');
+});
+
+
+// -- C&B footer + docs for the new assets -----------------------
+test('every page carries the shared "Implemented by Consulting & Beyond" footer', () => {
+  PAGES.forEach((p) => {
+    const src = read(p);
+    assert.match(src, /class="cb-footer"/, p + ' footer block');
+    assert.match(src, /images\/cb-logo\.jpg/, p + ' C&B logo');
+    assert.match(src, /onerror="this\.style\.display=.(none|'none')."/,
+      p + ' footer must hide the logo when the file is missing');
+    assert.match(src, /Consulting &amp; Beyond/, p + ' text credit survives a missing logo');
+  });
+  assert.match(read('css/theme.css'), /\.cb-footer \{/, 'the footer style lives in the shared theme');
+});
+
+test('docs cover the new pieces: vendored jsPDF, logo, PDF report, photos tab', () => {
+  const third = read('docs/THIRD_PARTY.md');
+  assert.match(third, /jspdf/i, 'THIRD_PARTY.md names the vendored library');
+  assert.match(third, /MIT/i, 'THIRD_PARTY.md states its licence');
+  const arch = read('docs/ARCHITECTURE.md');
+  assert.match(arch, /cellToIstString/, 'architecture explains the capture-time repair');
+  assert.match(arch, /PDF report/i, 'architecture documents the PDF report');
+  assert.match(arch, /photo gallery/i, 'architecture documents the Photos tab');
+  assert.match(arch, /cb-logo\.jpg/, 'architecture documents where the C&B logo lives');
+  const api = read('docs/API.md');
+  assert.match(api, /optionally `section`/, 'API.md documents the getPhotos section param');
+  const readme = read('README.md');
+  assert.match(readme, /cb-logo\.jpg/, 'README says where the logo goes and how to replace it');
+  assert.match(readme, /Download PDF report|PDF report/, 'README explains how to produce the PDF');
 });

@@ -134,13 +134,18 @@ No Drive URL is ever exposed.
 
 ### `getPhotos` → GET
 Params: `dateFrom`, `dateTo` (`YYYY-MM-DD`; default the last 7 days; capped at
-92 days). Returns `{ ok, dateFrom, dateTo, total, truncated, photos:[{ date,
+92 days) and optionally `section` (an exact section name — only that section's
+photos are returned; the 200-item cap applies to the filtered result). Returns
+`{ ok, dateFrom, dateTo, section, total, truncated, photos:[{ date,
 timestamp, photoTime, staffName, section, taskId, taskName, status, sequence, remarks,
 photoRef, photoIndex, photoCount }] }`, newest first, at most 200. A row with
 several photos is expanded into **one item per photo**, so each `photoRef` is
 a single id (loaded with `getPhoto`) with its own `photoTime` (`YYYY-MM-DD
 HH:MM:SS` IST, or empty for older photos); `photoIndex` (1-based) and
 `photoCount` say where the photo sits among the task's photos.
+(The admin Photos tab fetches once per date range and filters client-side so it
+can show per-section counts; the server-side `section` parameter is there for
+narrow/API use.)
 
 ### `getDashboard` → GET
 Params: `dateFrom`, `dateTo` (`YYYY-MM-DD`; swapped if reversed; capped at

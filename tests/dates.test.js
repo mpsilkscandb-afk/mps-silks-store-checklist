@@ -73,3 +73,30 @@ test('IST boundary: 18:29 UTC is still the same day in Asia/Kolkata', (t) => {
   }).formatToParts(instant).forEach((p) => { parts[p.type] = p.value; });
   assert.strictEqual(parts.year + '-' + parts.month + '-' + parts.day, '2026-10-20');
 });
+
+// -- photo-time display helpers ---------------------------------
+test('pretty renders an IST timestamp as "26 Oct 2026, 02:03 PM"', () => {
+  assert.strictEqual(Dates.pretty('2026-10-26 14:03:11'), '26 Oct 2026, 02:03 PM');
+  assert.strictEqual(Dates.pretty('2026-10-26 00:05:09'), '26 Oct 2026, 12:05 AM');
+  assert.strictEqual(Dates.pretty('2026-10-26 12:00:00'), '26 Oct 2026, 12:00 PM');
+  assert.strictEqual(Dates.pretty('2026-10-26 09:05'), '26 Oct 2026, 09:05 AM', 'seconds optional');
+  assert.strictEqual(Dates.pretty('2026-10-26'), '26 Oct 2026', 'a bare day stays a date');
+  // Unreadable input (e.g. old String(Date) garbage) must come back blank so
+  // callers can say "Photo time not recorded" instead of showing nonsense.
+  assert.strictEqual(Dates.pretty('Mon Oct 26 2026 14:03:11 GMT+0530'), '');
+  assert.strictEqual(Dates.pretty('junk'), '');
+  assert.strictEqual(Dates.pretty(''), '');
+  assert.strictEqual(Dates.pretty(null), '');
+  assert.strictEqual(Dates.pretty(undefined), '');
+});
+
+test('fromMs converts an instant to IST date/time parts', () => {
+  const p = Dates.fromMs(Date.UTC(2026, 9, 26, 8, 33, 11));   // 26 Oct 08:33:11 UTC
+  assert.strictEqual(p.date, '2026-10-26');
+  assert.strictEqual(p.time, '14:03:11');
+  assert.strictEqual(p.hm, '14:03');
+  const rolled = Dates.fromMs(Date.UTC(2026, 9, 26, 19, 59, 0));
+  assert.strictEqual(rolled.date, '2026-10-27', '19:59 UTC is already the next IST day');
+  assert.strictEqual(Dates.fromMs('junk'), null);
+  assert.strictEqual(Dates.fromMs(null), null);
+});

@@ -84,6 +84,34 @@
 
     isValid: function (s) { return !!Dates.parse(s); },
 
+    // IST parts {date, time, hm} for an instant (epoch ms or a Date).
+    fromMs: function (ms) {
+      if (ms === null || ms === undefined || ms === '') return null;
+      var d = ms instanceof Date ? ms : new Date(Number(ms));
+      if (isNaN(d.getTime())) return null;
+      return parts(d);
+    },
+
+    // 'YYYY-MM-DD HH:MM[:SS]' (or 'YYYY-MM-DD') → '26 Oct 2026, 02:03 PM'.
+    // Returns '' for anything unreadable (e.g. the old String(Date) garbage)
+    // so callers can show "Photo time not recorded" instead of nonsense.
+    pretty: function (s) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::\d{2})?)?/.exec(String(s === null || s === undefined ? '' : s).trim());
+      if (!m) return '';
+      var y = +m[1], mo = +m[2], d = +m[3];
+      if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+      var out = d + ' ' + MONTHS[mo - 1] + ' ' + y;
+      if (m[4] !== undefined) {
+        var hh = +m[4], mm = m[5];
+        if (hh > 23 || +mm > 59) return out;
+        var ampm = hh >= 12 ? 'PM' : 'AM';
+        var h12 = hh % 12;
+        if (h12 === 0) h12 = 12;
+        out += ', ' + (h12 < 10 ? '0' : '') + h12 + ':' + mm + ' ' + ampm;
+      }
+      return out;
+    },
+
     range: function (from, to, maxDays) {
       var out = [];
       if (!Dates.isValid(from) || !Dates.isValid(to) || from > to) return out;

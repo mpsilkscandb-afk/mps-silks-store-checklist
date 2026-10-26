@@ -127,6 +127,22 @@ name, role, IST timestamp, IST date) — a client cannot spoof them.
   dates) so string comparison works for filtering.
 - Today = IST today; the day rolls over at 00:00 IST even if the browser
   timezone differs (covered by boundary tests at 18:30 UTC).
+- **Capture time (`Photo_Time`) is plain text.** Two layers keep it that way:
+  the backend types the whole `Timestamp` / `Photo_Time` columns as text (`@`,
+  done once, idempotently, inside the submit lock) *and* writes `String(...)`;
+  and every read passes through `cellToIstString()`, which turns any `Date`
+  object Sheets still hands back (rows written before the columns were typed)
+  into the store's wall-clock `YYYY-MM-DD HH:MM:SS` by adding +5:30 and reading
+  the UTC getters — so it never depends on the script machine's zone. Comma
+  lists ("t1,t2") stay strings, keeping the times index-aligned with the ids.
+- **The capture time is read on the phone, not at upload time.** `js/exif.js`
+  parses the JPEG's EXIF `DateTimeOriginal` from the *original* file (canvas
+  re-compression strips EXIF), falling back to `file.lastModified`, then "now"
+  (`UI.getPhotoTakenAt`). EXIF carries no timezone, so its value is treated as
+  the phone's/store's local (IST) wall clock. On the server,
+  `cleanPhotoTime` keeps a well-formed value unless it is more than 14 days in
+  the past or 24 h in the future (phone clocks drift; gallery photos can be
+  old) — it is never blanked just for being "too exact".
 
 ## 6. Session & authorization flow
 
@@ -163,8 +179,46 @@ neutralised with a leading apostrophe (CSV *and* XLSX).
 ## 9. Build & CI
 
 - `scripts/check-syntax.js` — parses every `.js/.gs/.json` file (lint).
-- `scripts/build.js` — copies to `dist/`, injects `MPS_API_ENDPOINT` into
-  `dist/js/config.js`.
+- `scripts/build.js` — copies to `dist/` (including `js/vendor/` and `images/`),
+  injects `MPS_API_ENDPOINT` into `dist/js/config.js`.
 - `.github/workflows/deploy.yml` — on push to `main`: lint → test → build →
   deploy `dist/` to GitHub Pages (endpoint from repository variable
   `MPS_API_ENDPOINT`; never a secret).
+
+## 10. Admin photo gallery (Photos tab)
+
+One `getPhotos` call per chosen date range; the response is grouped client-side
+so the tab can offer **section filter chips with counts** ("All (n)" plus one
+chip per section). The selected chip is remembered while the range changes (and
+reverts to "All" if that section has no photos in the new range). Cards show
+task, staff, **Photo taken** (the EXIF-derived capture time) and **Submitted**
+(the row timestamp) separately, the photo's position (photo *i* of *n*) and a
+status badge; thumbs load on tap (the list never downloads 200 images at once)
+and open in a enlarge-on-tap modal. "All" mode groups photos under section
+headings; a single-section chip shows a flat newest-first list.
+
+## 11. PDF report (client-side)
+
+`js/report.js` — `buildReportData(checklistResponse, staff, now)` is **pure**
+(tested in Node) and turns the checklist payload into the report model
+(header, summary counts + completion %, per-section rows with worded statuses
+and photo lists). `downloadReport(data, opts)` lazily injects the **vendored**
+`js/vendor/jspdf.umd.min.js` (never a CDN), fetches the photos through the
+same private `getPhoto` endpoint (3 in flight, progress shown, failures drawn
+as "Photo unavailable"), re-compresses thumbs to ≤ 800 px, and renders an A4
+report in the MPS palette: header with the MPS logo, summary strip, a table
+per section (Task | Response | Status | Remarks, coloured **and** worded
+status), photo thumbnails with "Photo taken: … IST" + "Photo *i* of *n*"
+captions, and a footer on every page with the C&B logo. Saving uses a Blob URL
+where `a.download` is unavailable (iOS Safari). An admin-wide variant can reuse
+the same two functions from `dashboard.html` with a `getDashboard` payload.
+
+## 12. Branding footer
+
+Every page renders a shared `.cb-footer` credit ("Implemented by Consulting &
+Beyond") from `css/theme.css`. The logo is `images/cb-logo.jpg`; the `<img>`
+carries `onerror="this.style.display='none'"`, so a missing or unreadable file
+degrades to the text credit instead of a broken image. The same logo appears in
+the PDF footer, where jsPDF's `addImage` **detects the format from the loaded
+data URL** (`image/jpeg` → `JPEG`, `image/png` → `PNG`) instead of assuming one,
+and it is skipped cleanly if the file fails to load.
