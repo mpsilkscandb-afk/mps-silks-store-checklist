@@ -544,9 +544,11 @@ function onAnswerInput(e) {
   if (etxt) { getAns(etxt).v = el.value.trim(); markUr(etxt); return; }
 }
 
-// 'YYYY-MM-DD HH:MM:SS' → 'HH:MM' (with the date when it is not today)
+// 'YYYY-MM-DD HH:MM:SS' → 'HH:MM' (with the date when it is not today).
+// Only real capture times are shown; a date-only / midnight / pre-app value
+// yields '' so the card shows no time rather than a stray date.
 function fmtPhotoTime(pt) {
-  if (!pt) return '';
+  if (!window.Dates.hasTime(pt)) return '';
   return (String(pt).slice(0, 10) === today ? '' : String(pt).slice(0, 10) + ' ') + String(pt).slice(11, 16);
 }
 function getAns(id) { if (!ans[id]) ans[id] = {}; return ans[id]; }

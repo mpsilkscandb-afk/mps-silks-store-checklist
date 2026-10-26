@@ -48,6 +48,23 @@
     return out;
   }
 
+  // Photo capture time for the PDF caption: the pretty form ONLY when the
+  // value carries a real date AND a real time; otherwise '' so the caption
+  // prints "not recorded" instead of a bare date. Mirrors Dates.prettyPhoto
+  // (report.js is standalone and cannot depend on the browser Dates helper).
+  // Rejects a bare date, a midnight stamp (date-only cell) and pre-app years
+  // (a Sheets time-of-day serial, 1899-12-30).
+  function photoStamp(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(s || '').trim());
+    if (!m) return '';
+    var y = +m[1], mo = +m[2], d = +m[3], hh = +m[4], mm = +m[5];
+    var ss = m[6] === undefined ? 0 : +m[6];
+    if (y < 2020 || mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+    if (hh > 23 || mm > 59 || ss > 59) return '';
+    if (hh === 0 && mm === 0 && ss === 0) return '';
+    return prettyStamp(s);
+  }
+
   // Keep the PDF inside standard-font territory: no emoji, no ₹, no
   // typographic dashes (they render as boxes in the 14 core fonts).
   function safeText(s) {
@@ -540,7 +557,7 @@
               doc.setTextColor.apply(doc, INK60);
               doc.text('Photo unavailable', x + TW / 2, y + ih / 2, { align: 'center' });
             }
-            var taken = prettyStamp(ph.takenAt);
+            var taken = photoStamp(ph.takenAt);
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(7.5);
             doc.setTextColor.apply(doc, INK);
@@ -603,6 +620,7 @@
     buildReportData: buildReportData,
     downloadReport: downloadReport,
     prettyStamp: prettyStamp,
+    photoStamp: photoStamp,
     safeText: safeText,
     imgFormat: imgFormat,
     whiteLogo: whiteLogo

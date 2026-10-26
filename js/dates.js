@@ -112,6 +112,31 @@
       return out;
     },
 
+    // Does this value carry a REAL capture time (a date AND a time)? Used to
+    // decide between "Photo taken: …" and "Photo time not recorded". Rejects:
+    //  • a bare date ('2026-10-26')          → no time part at all
+    //  • a midnight stamp ('… 00:00:00')     → a date-only cell read back as a Date
+    //  • a pre-app year (< 2020, e.g. 1899)  → a Sheets time-of-day serial
+    hasTime: function (s) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(
+        String(s === null || s === undefined ? '' : s).trim());
+      if (!m) return false;                                  // empty / date-only / junk
+      var y = +m[1], mo = +m[2], d = +m[3], hh = +m[4], mm = +m[5];
+      var ss = m[6] === undefined ? 0 : +m[6];
+      if (y < 2020) return false;                            // 1899 time-of-day serial
+      if (mo < 1 || mo > 12 || d < 1 || d > 31) return false;
+      if (hh > 23 || mm > 59 || ss > 59) return false;
+      if (hh === 0 && mm === 0 && ss === 0) return false;    // midnight = date-only
+      return true;
+    },
+
+    // Photo capture time for display: the pretty form ONLY when the value has
+    // a real date AND time; otherwise '' so the caller shows "Photo time not
+    // recorded". Never returns a bare date.
+    prettyPhoto: function (s) {
+      return Dates.hasTime(s) ? Dates.pretty(s) : '';
+    },
+
     range: function (from, to, maxDays) {
       var out = [];
       if (!Dates.isValid(from) || !Dates.isValid(to) || from > to) return out;

@@ -175,6 +175,42 @@ var MPSCore = (function () {
     return str(v);
   }
 
+  // Does a single 'YYYY-MM-DD HH:MM[:SS]' value carry a REAL capture time?
+  // Rejects a bare date (no time part), a midnight stamp (a date-only cell
+  // Sheets read back as a Date at 00:00:00) and any pre-app year (Sheets
+  // serialises a time-of-day-only cell as 1899-12-30, whose IST offset is
+  // +05:53:28). None of these is a trustworthy photo capture time.
+  function photoTimeHasRealTime(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(String(s || '').trim());
+    if (!m) return false;                                   // junk / empty
+    var y = +m[1], mo = +m[2], d = +m[3];
+    if (y < 2020) return false;                             // 1899 time-of-day serial
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return false;
+    if (m[4] === undefined) return false;                   // no time part at all
+    var hh = +m[4], mm = +m[5], ss = m[6] === undefined ? 0 : +m[6];
+    if (hh > 23 || mm > 59 || ss > 59) return false;
+    if (hh === 0 && mm === 0 && ss === 0) return false;     // midnight = date-only
+    return true;
+  }
+
+  // Photo_Time cell → ","-list of 'YYYY-MM-DD HH:MM:SS', keeping slot
+  // alignment with the ","-list of photo ids. Old rows are first repaired via
+  // cellToIstString (a Sheets Date becomes a full timestamp); then every slot
+  // that carries no REAL time (a bare date, a midnight stamp or an 1899
+  // serial) is blanked so admin/dashboard/PDF say "Photo time not recorded"
+  // instead of a bare date or "12:00 AM". This is the ROOT-CAUSE guard on the
+  // value side; the display side (Dates.prettyPhoto) is defence in depth.
+  function normalizePhotoTimeCell(v) {
+    if (v === null || v === undefined) return '';
+    var s = cellToIstString(v);
+    if (!s) return '';
+    var parts = String(s).split(',');
+    for (var i = 0; i < parts.length; i++) {
+      if (!photoTimeHasRealTime(parts[i])) parts[i] = '';
+    }
+    return parts.join(',');
+  }
+
   // ── PIN hashing (pure JS SHA-256) ────────────────────────────
   var SHA_K = [
     0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
@@ -439,7 +475,7 @@ var MPSCore = (function () {
         type: col.type !== undefined ? str(raw[col.type]) : '',
         response: col.response !== undefined ? str(raw[col.response]) : '',
         photoRef: col.photoUrl !== undefined ? str(raw[col.photoUrl]) : '',
-        photoTime: col.photoTime !== undefined ? cellToIstString(raw[col.photoTime]) : '',
+        photoTime: col.photoTime !== undefined ? normalizePhotoTimeCell(raw[col.photoTime]) : '',
         status: col.status !== undefined ? str(raw[col.status]).toUpperCase() : '',
         remarks: col.remarks !== undefined ? str(raw[col.remarks]) : '',
         sequence: col.sequence !== undefined ? str(raw[col.sequence]) : '',
@@ -883,6 +919,8 @@ var MPSCore = (function () {
     dayRange: dayRange,
     normDateCell: normDateCell,
     cellToIstString: cellToIstString,
+    photoTimeHasRealTime: photoTimeHasRealTime,
+    normalizePhotoTimeCell: normalizePhotoTimeCell,
     sha256Hex: sha256Hex,
     hashPin: hashPin,
     verifyPin: verifyPin,

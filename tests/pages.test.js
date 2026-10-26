@@ -662,3 +662,26 @@ test('docs cover the new pieces: vendored jsPDF, logo, PDF report, photos tab', 
   assert.match(readme, /cb-logo\.png/, 'README says where the logo goes and how to replace it');
   assert.match(readme, /Download PDF report|PDF report/, 'README explains how to produce the PDF');
 });
+
+test('photo-time display rule: never a bare date as "Photo taken"', () => {
+  // Every surface that prints a capture time must go through the guarded
+  // helper (Dates.prettyPhoto / R.photoStamp), which returns '' unless the
+  // value carries a real date AND time. A date-only value must fall back to
+  // "Photo time not recorded", never "Photo taken: 26 Oct 2026".
+  const admin = read('admin.html');
+  assert.match(admin, /Dates\.prettyPhoto\(ph\.photoTime\)/,
+    'admin card uses prettyPhoto, not the bare-date pretty');
+  assert.doesNotMatch(admin, /ph\.photoTime \? window\.Dates\.pretty\(/,
+    'admin must not treat any truthy photoTime as a showable time');
+  const dash = read('dashboard.html');
+  assert.match(dash, /Dates\.prettyPhoto\(/,
+    'dashboard photo caption uses prettyPhoto');
+  assert.doesNotMatch(dash, /var pretty = pt \? window\.Dates\.pretty\(pt\)/,
+    'dashboard must not treat any truthy photoTime as a showable time');
+  const rep = read('js/report.js');
+  assert.match(rep, /photoStamp\(ph\.takenAt\)/,
+    'PDF caption uses the guarded photoStamp');
+  const page = read('checklist.html');
+  assert.match(page, /function fmtPhotoTime\(pt\) \{[\s\S]*?Dates\.hasTime\(pt\)/,
+    'the staff "Completed" card time also guards against a date-only value');
+});

@@ -100,3 +100,29 @@ test('fromMs converts an instant to IST date/time parts', () => {
   assert.strictEqual(Dates.fromMs('junk'), null);
   assert.strictEqual(Dates.fromMs(null), null);
 });
+
+// -- photo capture times must carry a REAL date AND time ----------------
+// A date-only value, a midnight timestamp (a date-only Sheets cell read
+// back as a Date) or a pre-app serial (Sheets time-of-day cells serialise
+// as 1899-12-30) is NOT a recorded capture time, so prettyPhoto returns ''
+// and the caller shows "Photo time not recorded" — never a bare date.
+test('prettyPhoto shows a time only when the value has a real date AND time', () => {
+  // real capture times keep their time
+  assert.strictEqual(Dates.prettyPhoto('2026-10-26 10:31:00'), '26 Oct 2026, 10:31 AM');
+  assert.strictEqual(Dates.prettyPhoto('2026-10-26 00:05:09'), '26 Oct 2026, 12:05 AM',
+    'a genuine just-after-midnight capture still shows');
+  // THE BUG: a bare date must never be shown as a capture time
+  assert.strictEqual(Dates.prettyPhoto('2026-10-26'), '', 'date-only ? not recorded');
+  // midnight = a date-only Sheets cell, so it is not a real capture time
+  assert.strictEqual(Dates.prettyPhoto('2026-10-26 00:00:00'), '', 'midnight ? not recorded');
+  assert.strictEqual(Dates.prettyPhoto('2026-10-26 00:00'), '', 'midnight (no seconds) ? not recorded');
+  // Sheets time-of-day cells serialise as 1899-12-30 (+IST LMT 05:53:28)
+  assert.strictEqual(Dates.prettyPhoto('1899-12-30 05:53:28'), '', 'pre-app serial ? not recorded');
+  // empty / unreadable
+  assert.strictEqual(Dates.prettyPhoto(''), '');
+  assert.strictEqual(Dates.prettyPhoto(null), '');
+  assert.strictEqual(Dates.prettyPhoto(undefined), '');
+  assert.strictEqual(Dates.prettyPhoto('junk'), '');
+  // 'pretty' itself is unchanged (the Timestamp column still shows a date)
+  assert.strictEqual(Dates.pretty('2026-10-26'), '26 Oct 2026', 'pretty is untouched');
+});

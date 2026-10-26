@@ -697,3 +697,31 @@ test('listPhotos can be narrowed to a single section', () => {
   assert.strictEqual(C.listPhotos(subs, '2026-10-21', '2026-10-21', 200, 'Nope').total, 0);
 });
 
+
+test('normalizeSubmissions blanks photo times that carry no real time', () => {
+  // ROOT CAUSE (value side): Photo_Time must never be emitted as a bare
+  // date, a midnight stamp (date-only cell) or a pre-app serial. Each of
+  // these used to survive cellToIstString and surface as "Photo taken:
+  // 26 Oct 2026" / "12:00 AM" / "30 Dec 1899" in admin, dashboard and PDF.
+  const H = ['Timestamp', 'Date', 'Staff_Name', 'Role', 'Section', 'Task_ID', 'Task_Name',
+    'Type', 'Response', 'Photo_URL', 'Photo_Time', 'Status', 'Remarks', 'Sequence'];
+  const one = (photoTimeCell) => C.normalizeSubmissions(H, [
+    ['2026-10-26 10:31:00', '2026-10-26', 'Abu', 'Staff', 'Opening & Security', 'T001',
+      'Open the store', 'photo', 'Photo', 'fileid00001', photoTimeCell, 'OK', '', 'First']
+  ])[0].photoTime;
+
+  // forms that must be blanked
+  assert.strictEqual(one('2026-10-26'), '', 'date-only text ? blank');
+  assert.strictEqual(one(new Date(Date.UTC(2026, 9, 25, 18, 30, 0))), '',
+    'IST-midnight Date (date-only cell) ? blank');
+  assert.strictEqual(one(new Date(Date.UTC(1899, 11, 30, 5, 53, 28))), '',
+    'Sheets time-of-day serial (1899) ? blank');
+  assert.strictEqual(one(''), '', 'empty stays empty');
+  // forms that must be preserved
+  assert.strictEqual(one('2026-10-26 10:31:00'), '2026-10-26 10:31:00', 'real datetime kept');
+  assert.strictEqual(one(new Date(Date.UTC(2026, 9, 26, 5, 1, 0))), '2026-10-26 10:31:00',
+    'real datetime Date is repaired to IST, not dropped');
+  // a multi-photo list keeps index alignment; a bad slot is blanked, good kept
+  assert.strictEqual(one('2026-10-26 10:31:00,2026-10-26'), '2026-10-26 10:31:00,',
+    'the date-only second slot is blanked, the list stays aligned');
+});

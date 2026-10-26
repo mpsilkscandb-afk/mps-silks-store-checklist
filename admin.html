@@ -315,7 +315,7 @@ function phStatusBadge(st) {
 function phCard(ph) {
   var card = document.createElement('div');
   card.className = 'ph-card';
-  var takenTxt = ph.photoTime ? window.Dates.pretty(ph.photoTime) : '';
+  var takenTxt = window.Dates.prettyPhoto(ph.photoTime);
   var taken = takenTxt ? 'Photo taken: ' + takenTxt : 'Photo time not recorded';
   var submittedTxt = ph.timestamp ? window.Dates.pretty(ph.timestamp) : (ph.date || '');
   card.innerHTML = '<div class="ph-task">' + window.UI.esc(ph.taskName || ph.taskId) + '</div>'

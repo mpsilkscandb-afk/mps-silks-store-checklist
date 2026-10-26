@@ -186,3 +186,20 @@ test('whiteLogo degrades gracefully when there is no Image/canvas (Node)', async
   assert.strictEqual(out, null, 'whiteLogo resolves null without a DOM');
   assert.strictEqual(await R.whiteLogo(null), null, 'whiteLogo(null) is safe');
 });
+
+test('photoStamp shows a time only when the value has a real date AND time', () => {
+  // The PDF caption must never print a bare date as "Photo taken". A
+  // date-only value, a midnight stamp or a pre-app (1899) serial all mean
+  // "no real capture time", so photoStamp returns '' and the caption prints
+  // "not recorded".
+  assert.strictEqual(R.photoStamp('2026-10-26 10:31:00'), '26 Oct 2026, 10:31 AM');
+  assert.strictEqual(R.photoStamp('2026-10-26'), '', 'date-only -> not recorded');
+  assert.strictEqual(R.photoStamp('2026-10-26 00:00:00'), '', 'midnight -> not recorded');
+  assert.strictEqual(R.photoStamp('1899-12-30 05:53:28'), '', 'Sheets time-of-day serial -> not recorded');
+  assert.strictEqual(R.photoStamp(''), '');
+  assert.strictEqual(R.photoStamp(null), '');
+  assert.strictEqual(R.photoStamp(undefined), '');
+  // prettyStamp (used for the Timestamp header) is unchanged.
+  assert.strictEqual(R.prettyStamp('2026-10-26'), '26 Oct 2026', 'prettyStamp is untouched');
+  assert.strictEqual(R.prettyStamp('2026-10-26 14:03:11'), '26 Oct 2026, 02:03 PM');
+});

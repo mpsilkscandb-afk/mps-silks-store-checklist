@@ -306,7 +306,7 @@ function photoThumbs(t) {
   html += '</div>';
   // Capture time of the first photo, or a clear "not recorded" notice.
   var pt = String(t.photoTime || '').split(',')[0].trim();
-  var pretty = pt ? window.Dates.pretty(pt) : '';
+  var pretty = window.Dates.prettyPhoto(pt);
   html += '<div style="font-size:11px;color:var(--ink-60);margin-top:5px">'
     + window.UI.esc(pretty ? 'Photo taken: ' + pretty : 'Photo time not recorded') + '</div>';
   return html;
