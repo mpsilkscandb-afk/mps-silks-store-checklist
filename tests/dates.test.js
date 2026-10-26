@@ -126,3 +126,34 @@ test('prettyPhoto shows a time only when the value has a real date AND time', ()
   // 'pretty' itself is unchanged (the Timestamp column still shows a date)
   assert.strictEqual(Dates.pretty('2026-10-26'), '26 Oct 2026', 'pretty is untouched');
 });
+
+test('padHour pads a single-digit hour and leaves everything else alone', () => {
+  assert.strictEqual(Dates.padHour('2026-10-24 9:35:26'), '2026-10-24 09:35:26');
+  assert.strictEqual(Dates.padHour('2026-10-24 9:41'), '2026-10-24 09:41', 'seconds optional');
+  assert.strictEqual(Dates.padHour('2026-10-24 09:35:26'), '2026-10-24 09:35:26', 'two-digit unchanged');
+  assert.strictEqual(Dates.padHour('2026-10-24 10:03:29'), '2026-10-24 10:03:29', 'two-digit unchanged');
+  assert.strictEqual(Dates.padHour('2026-10-24'), '2026-10-24', 'date-only unchanged');
+  assert.strictEqual(Dates.padHour(''), '');
+  assert.strictEqual(Dates.padHour(null), '');
+  assert.strictEqual(Dates.padHour(undefined), '');
+});
+
+test('pretty / hasTime / prettyPhoto accept a single-digit hour', () => {
+  // pretty shows the time instead of silently dropping it to a bare date
+  assert.strictEqual(Dates.pretty('2026-10-24 9:35:26'), '24 Oct 2026, 09:35 AM');
+  assert.strictEqual(Dates.pretty('2026-10-24 09:35:26'), '24 Oct 2026, 09:35 AM');
+  assert.strictEqual(Dates.pretty('2026-10-24 10:03:29'), '24 Oct 2026, 10:03 AM');
+  assert.strictEqual(Dates.pretty('2026-10-26'), '26 Oct 2026', 'a bare day stays a date');
+  // hasTime accepts single-digit hours, still rejects non-times
+  assert.strictEqual(Dates.hasTime('2026-10-24 9:35:26'), true);
+  assert.strictEqual(Dates.hasTime('2026-10-24 10:03:29'), true);
+  assert.strictEqual(Dates.hasTime('2026-10-26'), false, 'date-only');
+  assert.strictEqual(Dates.hasTime(''), false, 'empty');
+  assert.strictEqual(Dates.hasTime('2026-10-24 0:00:00'), false, 'midnight = date-only');
+  assert.strictEqual(Dates.hasTime('1899-12-30 05:53:28'), false, '1899 serial');
+  // prettyPhoto: single-digit shown; non-times blank -> "Photo time not recorded"
+  assert.strictEqual(Dates.prettyPhoto('2026-10-24 9:35:26'), '24 Oct 2026, 09:35 AM');
+  assert.strictEqual(Dates.prettyPhoto('2026-10-26'), '', 'date-only -> not recorded');
+  assert.strictEqual(Dates.prettyPhoto(''), '', 'empty -> not recorded');
+  assert.strictEqual(Dates.prettyPhoto('1899-12-30 05:53:28'), '', '1899 serial -> not recorded');
+});

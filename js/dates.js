@@ -38,8 +38,19 @@
   var DAYS_S = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+  // Pad a single-digit hour: '2026-10-24 9:35:26' -> '2026-10-24 09:35:26'.
+  // Sheets and manual edits can store '9:35:26'; every parser here expects a
+  // two-digit hour, so we normalise BEFORE parsing. An already two-digit hour,
+  // a date-only value, junk, or a ","-list (split first) is returned as-is.
+  function padHour(s) {
+    return String(s === null || s === undefined ? '' : s).replace(
+      /^(\d{4}-\d{2}-\d{2}[ T])(\d)(:\d{2}(?::\d{2})?)$/,
+      function (m, date, h, rest) { return date + '0' + h + rest; });
+  }
+
   var Dates = {
     tz: TZ,
+    padHour: padHour,
 
     today: function () { return parts(new Date()).date; },
     now: function () { return parts(new Date()); },
@@ -96,7 +107,8 @@
     // Returns '' for anything unreadable (e.g. the old String(Date) garbage)
     // so callers can show "Photo time not recorded" instead of nonsense.
     pretty: function (s) {
-      var m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::\d{2})?)?/.exec(String(s === null || s === undefined ? '' : s).trim());
+      var v = padHour(s);
+      var m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::\d{2})?)?/.exec(String(v === null || v === undefined ? '' : v).trim());
       if (!m) return '';
       var y = +m[1], mo = +m[2], d = +m[3];
       if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
@@ -118,8 +130,9 @@
     //  • a midnight stamp ('… 00:00:00')     → a date-only cell read back as a Date
     //  • a pre-app year (< 2020, e.g. 1899)  → a Sheets time-of-day serial
     hasTime: function (s) {
-      var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(
-        String(s === null || s === undefined ? '' : s).trim());
+      var v = padHour(s);
+      var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(
+        String(v === null || v === undefined ? '' : v).trim());
       if (!m) return false;                                  // empty / date-only / junk
       var y = +m[1], mo = +m[2], d = +m[3], hh = +m[4], mm = +m[5];
       var ss = m[6] === undefined ? 0 : +m[6];

@@ -203,3 +203,17 @@ test('photoStamp shows a time only when the value has a real date AND time', () 
   assert.strictEqual(R.prettyStamp('2026-10-26'), '26 Oct 2026', 'prettyStamp is untouched');
   assert.strictEqual(R.prettyStamp('2026-10-26 14:03:11'), '26 Oct 2026, 02:03 PM');
 });
+
+test('prettyStamp / photoStamp accept a single-digit hour', () => {
+  assert.strictEqual(R.prettyStamp('2026-10-24 9:35:26'), '24 Oct 2026, 09:35 AM');
+  assert.strictEqual(R.prettyStamp('2026-10-24 09:35:26'), '24 Oct 2026, 09:35 AM');
+  assert.strictEqual(R.prettyStamp('2026-10-24 10:03:29'), '24 Oct 2026, 10:03 AM');
+  assert.strictEqual(R.prettyStamp('2026-10-26'), '26 Oct 2026', 'a bare day stays a date');
+  assert.strictEqual(R.photoStamp('2026-10-24 9:35:26'), '24 Oct 2026, 09:35 AM');
+  assert.strictEqual(R.photoStamp('2026-10-24 09:35:26'), '24 Oct 2026, 09:35 AM');
+  assert.strictEqual(R.photoStamp('2026-10-24 10:03:29'), '24 Oct 2026, 10:03 AM');
+  // photoStamp still refuses non-times -> caption prints "not recorded"
+  assert.strictEqual(R.photoStamp('2026-10-26'), '', 'date-only -> not recorded');
+  assert.strictEqual(R.photoStamp(''), '', 'empty');
+  assert.strictEqual(R.photoStamp('1899-12-30 05:53:28'), '', '1899 serial');
+});

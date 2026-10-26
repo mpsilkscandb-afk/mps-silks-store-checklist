@@ -175,13 +175,24 @@ var MPSCore = (function () {
     return str(v);
   }
 
+  // Pad a single-digit hour: '2026-10-24 9:35:26' -> '2026-10-24 09:35:26'.
+  // Sheets and manual edits can store '9:35:26'; our parsers expect two
+  // digits, so we normalise BEFORE parsing. An already two-digit hour, a
+  // date-only value, junk or a ","-list (split first) is returned unchanged.
+  function padHour(s) {
+    return String(s === null || s === undefined ? '' : s).replace(
+      /^(\d{4}-\d{2}-\d{2}[ T])(\d)(:\d{2}(?::\d{2})?)$/,
+      function (m, date, h, rest) { return date + '0' + h + rest; });
+  }
+
   // Does a single 'YYYY-MM-DD HH:MM[:SS]' value carry a REAL capture time?
   // Rejects a bare date (no time part), a midnight stamp (a date-only cell
   // Sheets read back as a Date at 00:00:00) and any pre-app year (Sheets
   // serialises a time-of-day-only cell as 1899-12-30, whose IST offset is
   // +05:53:28). None of these is a trustworthy photo capture time.
   function photoTimeHasRealTime(s) {
-    var m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(String(s || '').trim());
+    var v = padHour(s);
+    var m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(String(v || '').trim());
     if (!m) return false;                                   // junk / empty
     var y = +m[1], mo = +m[2], d = +m[3];
     if (y < 2020) return false;                             // 1899 time-of-day serial
@@ -206,7 +217,7 @@ var MPSCore = (function () {
     if (!s) return '';
     var parts = String(s).split(',');
     for (var i = 0; i < parts.length; i++) {
-      if (!photoTimeHasRealTime(parts[i])) parts[i] = '';
+      parts[i] = photoTimeHasRealTime(parts[i]) ? padHour(parts[i]) : '';
     }
     return parts.join(',');
   }
@@ -539,8 +550,8 @@ var MPSCore = (function () {
   // it is more than 14 days in the past or more than 24 h in the future
   // (phone clocks are often a little off; gallery photos can be old).
   function cleanPhotoTime(v, nowMs) {
-    var s = str(v);
-    if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) return '';
+    var s = padHour(str(v));
+    if (!/^\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}:\d{2}$/.test(s)) return '';
     var t = Date.parse(s.replace(' ', 'T') + '+05:30');
     if (isNaN(t)) return '';
     var now = nowMs || Date.now();
@@ -919,6 +930,7 @@ var MPSCore = (function () {
     dayRange: dayRange,
     normDateCell: normDateCell,
     cellToIstString: cellToIstString,
+    padHour: padHour,
     photoTimeHasRealTime: photoTimeHasRealTime,
     normalizePhotoTimeCell: normalizePhotoTimeCell,
     sha256Hex: sha256Hex,

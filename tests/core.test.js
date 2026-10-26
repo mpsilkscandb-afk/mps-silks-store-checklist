@@ -725,3 +725,38 @@ test('normalizeSubmissions blanks photo times that carry no real time', () => {
   assert.strictEqual(one('2026-10-26 10:31:00,2026-10-26'), '2026-10-26 10:31:00,',
     'the date-only second slot is blanked, the list stays aligned');
 });
+
+test('padHour + photo-time parsers accept a single-digit hour', () => {
+  assert.strictEqual(C.padHour('2026-10-24 9:35:26'), '2026-10-24 09:35:26');
+  assert.strictEqual(C.padHour('2026-10-24 09:35:26'), '2026-10-24 09:35:26');
+  assert.strictEqual(C.photoTimeHasRealTime('2026-10-24 9:35:26'), true, 'single-digit hour accepted');
+  assert.strictEqual(C.photoTimeHasRealTime('2026-10-24 10:03:29'), true);
+  assert.strictEqual(C.photoTimeHasRealTime('2026-10-26'), false, 'date-only');
+  assert.strictEqual(C.photoTimeHasRealTime(''), false, 'empty');
+  assert.strictEqual(C.photoTimeHasRealTime('1899-12-30 05:53:28'), false, '1899 serial');
+});
+
+test('normalizePhotoTimeCell pads single-digit hours and keeps comma alignment', () => {
+  assert.strictEqual(C.normalizePhotoTimeCell('2026-10-24 9:35:26'), '2026-10-24 09:35:26');
+  assert.strictEqual(C.normalizePhotoTimeCell('2026-10-24 09:35:26'), '2026-10-24 09:35:26');
+  assert.strictEqual(C.normalizePhotoTimeCell('2026-10-24 10:03:29'), '2026-10-24 10:03:29');
+  assert.strictEqual(C.normalizePhotoTimeCell('2026-10-26'), '', 'date-only -> blank');
+  assert.strictEqual(C.normalizePhotoTimeCell(''), '', 'empty');
+  assert.strictEqual(C.normalizePhotoTimeCell('1899-12-30 05:53:28'), '', '1899 serial -> blank');
+  // comma-separated list: the single-digit second slot is padded, alignment kept
+  assert.strictEqual(C.normalizePhotoTimeCell('2026-10-24 10:03:29,2026-10-24 9:41:02'),
+    '2026-10-24 10:03:29,2026-10-24 09:41:02');
+  // a bad second slot is blanked while the good one is kept
+  assert.strictEqual(C.normalizePhotoTimeCell('2026-10-24 10:03:29,2026-10-26'),
+    '2026-10-24 10:03:29,');
+});
+
+test('cleanPhotoTime accepts a single-digit hour (padded) and rejects non-times', () => {
+  const now = Date.parse('2026-10-24T12:00:00+05:30');
+  assert.strictEqual(C.cleanPhotoTime('2026-10-24 9:35:26', now), '2026-10-24 09:35:26');
+  assert.strictEqual(C.cleanPhotoTime('2026-10-24 09:35:26', now), '2026-10-24 09:35:26');
+  assert.strictEqual(C.cleanPhotoTime('2026-10-24 10:03:29', now), '2026-10-24 10:03:29');
+  assert.strictEqual(C.cleanPhotoTime('2026-10-26', now), '', 'date-only');
+  assert.strictEqual(C.cleanPhotoTime('', now), '', 'empty');
+  assert.strictEqual(C.cleanPhotoTime('1899-12-30 05:53:28', now), '', '1899 out of window');
+});

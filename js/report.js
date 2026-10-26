@@ -21,6 +21,16 @@
 
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
 
+  // Pad a single-digit hour: '2026-10-24 9:35:26' -> '2026-10-24 09:35:26'.
+  // Sheets/manual edits can store '9:35:26'; our parsers expect two digits.
+  // An already two-digit hour, a date-only value, junk or a ","-list is
+  // returned unchanged (split comma lists before calling).
+  function padHour(s) {
+    return String(s === null || s === undefined ? '' : s).replace(
+      /^(\d{4}-\d{2}-\d{2}[ T])(\d)(:\d{2}(?::\d{2})?)$/,
+      function (m, date, h, rest) { return date + '0' + h + rest; });
+  }
+
   // Epoch ms → IST parts, with no Intl dependency (deterministic in tests).
   function istParts(ms) {
     var d = new Date(Number(ms) + IST_OFFSET_MS);
@@ -33,7 +43,8 @@
 
   // '2026-10-26 14:03:11' → '26 Oct 2026, 02:03 PM' ('' when unreadable).
   function prettyStamp(s) {
-    var m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec(String(s || '').trim());
+    var v = padHour(s);
+    var m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/.exec(String(v || '').trim());
     if (!m) return '';
     var y = +m[1], mo = +m[2], d = +m[3];
     if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
@@ -55,14 +66,15 @@
   // Rejects a bare date, a midnight stamp (date-only cell) and pre-app years
   // (a Sheets time-of-day serial, 1899-12-30).
   function photoStamp(s) {
-    var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(s || '').trim());
+    var v = padHour(s);
+    var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(String(v || '').trim());
     if (!m) return '';
     var y = +m[1], mo = +m[2], d = +m[3], hh = +m[4], mm = +m[5];
     var ss = m[6] === undefined ? 0 : +m[6];
     if (y < 2020 || mo < 1 || mo > 12 || d < 1 || d > 31) return '';
     if (hh > 23 || mm > 59 || ss > 59) return '';
     if (hh === 0 && mm === 0 && ss === 0) return '';
-    return prettyStamp(s);
+    return prettyStamp(v);
   }
 
   // Keep the PDF inside standard-font territory: no emoji, no ₹, no
