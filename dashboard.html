@@ -21,6 +21,10 @@
     background: var(--ink-10); color: var(--ink-60); border: 1.5px solid transparent;
   }
   .qb.on { background: var(--maroon-l); color: var(--maroon); border-color: var(--maroon); }
+  /* admin date-range PDF report dialog */
+  .pdf-check { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin: 2px 0 6px; cursor: pointer; }
+  .pdf-check input { width: 18px; height: 18px; accent-color: var(--maroon); }
+  .pdf-progress { font-size: 12px; color: var(--maroon); font-weight: 700; min-height: 18px; margin-top: 8px; }
 
   .impact {
     border-radius: var(--r); padding: 16px 18px; margin-bottom: 14px;
@@ -113,6 +117,7 @@
 
     <div class="toolbar">
       <div class="section-title" style="margin:0;flex:1">Reports &amp; Details</div>
+      <button class="btn sm no-print" onclick="openPdfModal()">&#128196; PDF report</button>
       <button class="btn sm gold no-print" onclick="exportXlsx()">&#128202; Excel (.xlsx)</button>
       <button class="btn sm ghost no-print" onclick="exportCsv()">&#128203; CSV</button>
     </div>
@@ -150,12 +155,34 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="pdfModal" onclick="closePdfModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3>Download PDF report</h3>
+    <div class="grid-2">
+      <div class="field"><label>From</label><input id="pdfFrom" type="date"/></div>
+      <div class="field"><label>To</label><input id="pdfTo" type="date"/></div>
+    </div>
+    <div class="field"><label>Staff</label>
+      <select id="pdfStaff"><option value="">All staff (whole store)</option></select>
+      <span class="hint">Pick one person to get exactly the tasks on their own checklist each day, the same as their own PDF.</span>
+    </div>
+    <label class="pdf-check"><input type="checkbox" id="pdfPhotos" checked/> Include photos</label>
+    <div class="hint" style="font-size:11px;color:var(--ink-60)">Up to 31 days in one PDF. Photos make it larger and slower; untick them for long ranges.</div>
+    <div class="pdf-progress" id="pdfProgress"></div>
+    <div class="modal-btns">
+      <button class="btn ghost" id="pdfCancel" onclick="closePdfModal()">Close</button>
+      <button class="btn" id="pdfGo" onclick="downloadRangePdf()">&#128196; Download</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/api.js"></script>
 <script src="js/dates.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/xlsx.js"></script>
+<script src="js/report.js"></script>
 <script>
 (function () {
 'use strict';
@@ -473,6 +500,79 @@ window.openPhoto = function (fileId) {
 window.closePhotoModal = function (e) {
   if (e && e.target && e.target.closest && e.target.closest('.modal') && e.type === 'click') return;
   document.getElementById('photoModal').classList.remove('open');
+};
+
+// ── admin date-range PDF report ───────────────────────────────
+// Same layout as the staff PDF, one block per day, for the whole store or
+// one person. Data comes from the admin-only getReport action; the PDF is
+// drawn in the browser by js/report.js (vendored jsPDF, no CDN).
+var PDF_MAX_DAYS = 31;
+var pdfUsersLoaded = false, pdfBusy = false;
+function pdfProgress(t) { document.getElementById('pdfProgress').textContent = t || ''; }
+function daysBetween(from, to) {
+  var a = Date.parse(from + 'T00:00:00Z'), b = Date.parse(to + 'T00:00:00Z');
+  return Math.round((b - a) / 86400000) + 1;
+}
+window.openPdfModal = function () {
+  if (!pdfBusy) {
+    document.getElementById('pdfFrom').value = document.getElementById('dateFrom').value;
+    document.getElementById('pdfTo').value = document.getElementById('dateTo').value;
+    pdfProgress('');
+  }
+  document.getElementById('pdfModal').classList.add('open');
+  if (pdfUsersLoaded) return;
+  window.MPS_API.get('getUsers', {}).then(function (r) {
+    if (!r || !r.ok || pdfUsersLoaded) return;
+    pdfUsersLoaded = true;
+    var sel = document.getElementById('pdfStaff');
+    (r.users || []).filter(function (u) { return u.active; })
+      .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); })
+      .forEach(function (u) {
+        var o = document.createElement('option');
+        o.value = u.name;
+        o.textContent = u.name + (u.role ? ' (' + u.role + ')' : '');
+        sel.appendChild(o);
+      });
+  });
+};
+window.closePdfModal = function (e) {
+  if (e && e.target && e.target.closest && e.target.closest('.modal') && e.type === 'click') return;
+  if (pdfBusy) { window.UI.toast('The PDF is still being made. Please wait.', ''); return; }
+  document.getElementById('pdfModal').classList.remove('open');
+};
+window.downloadRangePdf = function () {
+  if (pdfBusy) return;
+  var from = document.getElementById('pdfFrom').value;
+  var to = document.getElementById('pdfTo').value;
+  if (!window.Dates.isValid(from) || !window.Dates.isValid(to)) { window.UI.toast('Choose a valid date range.', 'err'); return; }
+  if (from > to) { var t = from; from = to; to = t; document.getElementById('pdfFrom').value = from; document.getElementById('pdfTo').value = to; }
+  if (daysBetween(from, to) > PDF_MAX_DAYS) { window.UI.toast('Choose up to ' + PDF_MAX_DAYS + ' days for one PDF.', 'err'); return; }
+  var staff = document.getElementById('pdfStaff').value;
+  var withPhotos = document.getElementById('pdfPhotos').checked;
+  var CFG = window.MPS_CONFIG || {};
+  var go = document.getElementById('pdfGo');
+  pdfBusy = true; go.disabled = true;
+  pdfProgress('Loading report data...');
+  window.MPS_API.get('getReport', { dateFrom: from, dateTo: to, staff: staff }).then(function (r) {
+    if (!r || !r.ok) throw new Error((r && r.error) || 'Could not load the report.');
+    var data = window.MPSReport.buildRangeReportData(r, {
+      store: { name: CFG.storeName || 'MPS Silks', location: CFG.storeLocation || '' },
+      includePhotos: withPhotos
+    }, Date.now());
+    if (!data.summary.total) throw new Error('No tasks in this period.');
+    return window.MPSReport.downloadReport(data, {
+      photoLoader: withPhotos ? function (fileId) { return window.MPS_API.photoUrl(fileId); } : null,
+      onProgress: function (msg) { if (msg) pdfProgress(msg); }
+    });
+  }).then(function (name) {
+    pdfProgress('Saved: ' + name);
+    window.UI.toast('PDF saved: ' + name, 'ok');
+  }).catch(function (e) {
+    pdfProgress('');
+    window.UI.toast(e && e.message ? e.message : 'The PDF could not be created.', 'err');
+  }).then(function () {
+    pdfBusy = false; go.disabled = false;
+  });
 };
 
 // ── exports ───────────────────────────────────────────────────

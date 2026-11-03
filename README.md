@@ -36,6 +36,13 @@ audit history from a dashboard — with `.xlsx` / `.csv` export.
 
 ---
 
+## Roles and the admin PDF report
+
+- **Roles:** in `Users`, set each person's Role (`Admin`, `Manager`, `HR`, `Staff`, …). Only `Admin` opens the Dashboard / Admin page; every other role is a normal checklist user. In `Checklist_Config`, add a column headed **`Role`** and pick a role per task (e.g. `Manager`): that task then shows **only** to users with that role. Empty = everyone. Several roles: `Manager, HR`. After a role change the person logs out and in again.
+- **Admin PDF report:** Dashboard → **PDF report** → pick From / To (up to 31 days), All staff or one person, and whether to include photos → **Download**. Same layout as the staff PDF, one block per day, with a *Done by* column.
+
+---
+
 ## Quick start (local, nothing deployed)
 
 Requirements: **Node ≥ 18.17** (only for lint/test/build), Python 3 (optional, for the workbook template / cross-checks).

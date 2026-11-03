@@ -179,9 +179,10 @@
   <div class="field"><label>Frequency</label>
     <select id="f-frequency"><option value="Daily">Daily</option><option value="Weekly">Weekly (every Friday)</option><option value="Monthly">Monthly (the 28th)</option></select>
   </div>
-  <div class="field"><label>Assigned to (optional)</label>
-    <input id="f-assignedTo" type="text" placeholder="Leave empty for: everyone"/>
-    <span class="hint">Comma-separated staff names or roles. Empty = visible to all staff.</span>
+  <div class="field"><label>Role / assigned to (optional)</label>
+    <input id="f-assignedTo" type="text" list="roleChoices" placeholder="Leave empty for: everyone"/>
+    <datalist id="roleChoices"><option value="Manager"></option><option value="HR"></option><option value="Staff"></option></datalist>
+    <span class="hint">Pick a role (Manager, HR, Staff) to show this task only to that role. Several roles or staff names: separate with commas. Empty = visible to everyone.</span>
   </div>
   <div class="drawer-btns">
     <button class="btn ghost" onclick="closeTaskDrawer()">Cancel</button>
@@ -199,7 +200,7 @@
   <div class="field"><label id="u-pinLabel">PIN (4 digits)</label><input id="u-pin" type="password" inputmode="numeric" maxlength="4" placeholder="Enter PIN"/></div>
   <div class="grid-2">
     <div class="field"><label>Role</label>
-      <select id="u-role"><option value="Staff">Staff</option><option value="Admin">Admin</option></select>
+      <select id="u-role"><option value="Staff">Staff</option><option value="Manager">Manager</option><option value="HR">HR</option><option value="Admin">Admin</option></select>
     </div>
     <div class="field"><label>Status</label><select id="u-active"><option value="Yes">Active</option><option value="No">Inactive</option></select></div>
   </div>
@@ -575,7 +576,7 @@ window.openUserDrawer = function (userName, pinOnly) {
   document.getElementById('u-name').disabled = true;
   document.getElementById('u-pin').value = '';
   document.getElementById('u-pinLabel').textContent = 'PIN (4 digits)';
-  setVal('u-role', u.role === 'Admin' ? 'Admin' : 'Staff');
+  setRoleSelect(u.role);
   setVal('u-active', u.active ? 'Yes' : 'No');
   document.getElementById('userOverlay').classList.add('open');
   document.getElementById('userDrawer').classList.add('open');
@@ -653,6 +654,23 @@ window.saveSettings = function () {
     else window.UI.toast(r.error || 'Failed to save settings.', 'err');
   });
 };
+
+// Show the user's role as it is in the Users sheet (Manager, HR, a custom
+// role…). A role that is not in the list is added as an option, so saving
+// the form (e.g. a PIN reset) never silently turns it into "Staff".
+// Only "Admin" opens the Dashboard / Admin page; every other role is a
+// normal checklist user.
+function setRoleSelect(role) {
+  var el = document.getElementById('u-role');
+  var r = String(role || '').trim() || 'Staff';
+  for (var i = 0; i < el.options.length; i++) {
+    if (el.options[i].value.toLowerCase() === r.toLowerCase()) { el.selectedIndex = i; return; }
+  }
+  var opt = document.createElement('option');
+  opt.value = r; opt.textContent = r;
+  el.appendChild(opt);
+  el.value = r;
+}
 
 function setVal(id, val) {
   var el = document.getElementById(id);
