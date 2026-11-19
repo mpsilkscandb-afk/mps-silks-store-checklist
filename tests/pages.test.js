@@ -284,6 +284,41 @@ test('admin page guards access, wires tabs and activates the default panel', () 
     'panel-tasks must be active in the markup on first load');
 });
 
+test('admin panel: sidebar nav, hash routing, escaping and staff activity', () => {
+  const src = read('admin.html');
+  // the left sidebar carries one nav button per panel…
+  ['tasks', 'users', 'photos', 'settings'].forEach((t) =>
+    assert.ok(src.includes('data-tabbtn="' + t + '"'), 'nav button for ' + t + ' missing'));
+  assert.match(src, /class="adm-side"/, 'the sidebar shell must exist');
+  // …and the active tab lives in the hash: #staff opens the users panel
+  assert.match(src, /users:\s*'staff'/, 'hash #staff must map to the users panel');
+  assert.match(src, /keyForHash\(location\.hash\)/, 'the tab named in the hash is opened on load');
+  // admin-only gating keeps its identity + logout wiring
+  assert.match(src, /UI\.bindLogout\('btnLogout'\)/, 'logout must stay bound');
+  assert.match(src, /UI\.fillIdentity\('tbSub'/, 'the signed-in identity must be filled');
+  // every dynamic string put into HTML goes through UI.esc()
+  const escN = (src.match(/window\.UI\.esc\(/g) || []).length;
+  assert.ok(escN >= 15, 'admin must escape its dynamic strings, saw ' + escN);
+  // task controls stay writable: the toggle fires immediately (no confirm),
+  // Delete still asks first
+  assert.match(src, /function toggleTask\(/, 'the active toggle is wired');
+  assert.doesNotMatch(src, /confirm\('Toggle/, 'the active toggle must not ask for confirmation');
+  assert.match(src, /confirm\(/, 'delete keeps its confirmation');
+  // exactly ONE definition of each staff drawer opener (regression: two
+  // competing openUserDrawer definitions used to overwrite each other)
+  assert.strictEqual((src.match(/function openUserDrawer\(/g) || []).length, 1);
+  assert.strictEqual((src.match(/function openUserDrawerAdd\(/g) || []).length, 1);
+  // staff activity columns are fetched from getDashboard
+  assert.match(src, /MPS_API\.get\('getDashboard'/, 'staff activity comes from getDashboard');
+  // the layout stylesheet is linked and ships with the build (css/ is
+  // copied into dist recursively)
+  assert.match(src, /css\/admin\.css/);
+  assert.ok(fs.existsSync(path.join(ROOT, 'css', 'admin.css')), 'css/admin.css missing');
+  // the shared toast grew an optional action button (used for "Undo")
+  assert.match(read('js/ui.js'), /function toast\(msg, type, action\)/,
+    'UI.toast must accept an action');
+});
+
 test('POST requests send no custom headers (stays a CORS-simple request)', () => {
   const src = read('js/api.js');
   // A custom header (the previously shipped X-Token) forces an OPTIONS
@@ -503,44 +538,14 @@ test('photo time flows through the whole app', () => {
   assert.match(admin, /Photo taken: /, 'admin gallery labels the capture time');
 });
 
-test('task frequency: backend rules and submit guard are wired; admin lists it read-only', () => {
+test('task frequency: admin form, backend rules and submit guard are wired', () => {
   const admin = read('admin.html');
   const api = read('backend/MPS_BACKEND.gs');
-  assert.match(admin, /freqLabel\(t\.frequency\)/, 'admin task list shows each task frequency');
-  assert.doesNotMatch(admin, /id="f-frequency"/, 'admin no longer edits tasks (managed in the Google Sheet)');
+  assert.match(admin, /id="f-frequency"/, 'admin can set a task frequency');
+  assert.match(admin, /frequency: document\.getElementById\('f-frequency'\)\.value/, 'frequency is sent when saving a task');
   assert.match(api, /tasksForUser\(res\.tasks, sess\.name, sess\.role, today\)/, 'staff checklist only lists tasks due today');
   assert.match(api, /code: 'NOT_DUE'/, 'a task that is not due cannot be submitted');
   assert.match(api, /ensureHeaders_\('Checklist_Config', \['Frequency'\]\)/, 'Frequency header is added when missing');
-});
-
-test('admin: Tasks tab is a read-only list (tasks are edited in the Google Sheet)', () => {
-  const admin = read('admin.html');
-  ['addTask', 'updateTask', 'toggleTask', 'deleteTask'].forEach((a) =>
-    assert.doesNotMatch(admin, new RegExp(a), 'admin.html must not call ' + a));
-  assert.doesNotMatch(admin, /taskDrawer|openTaskDrawer|saveTask|data-edit-task|data-del-task|active-toggle/);
-  assert.match(admin, /Checklist_Config/, 'the page tells admins where tasks are managed');
-  assert.match(admin, /mapProblems/, 'sheet mapping problems stay visible');
-  assert.match(admin, /class="tgroup"/, 'tasks are grouped by section');
-});
-
-test('admin: Staff tab shows per-day stats, history and photos for each person', () => {
-  const admin = read('admin.html');
-  assert.match(admin, /MPS_API\.get\('getDashboard', \{ dateFrom: day, dateTo: day \}\)/, 'staff stats use one dashboard day');
-  assert.match(admin, /MPS_API\.get\('getPhotos', \{ dateFrom: day, dateTo: day \}\)/, 'staff photos use the same day');
-  assert.match(admin, /data-sact="pin"/, 'Reset PIN lives in the staff detail');
-  assert.match(admin, /data-sact="toggle"/, 'Activate / Deactivate lives in the staff detail');
-  assert.match(admin, /confirm\(msg\)/, 'deactivating asks for confirmation');
-  assert.match(admin, /id="phStaff"/, 'Photos tab can be filtered by staff');
-});
-
-test('admin: tabs use URL hashes and a bottom bar on phones', () => {
-  const admin = read('admin.html');
-  assert.match(admin, /staff: 'staff'|users: 'staff'/, 'Staff tab uses #staff');
-  assert.match(admin, /history\.replaceState/, 'selected tab is kept in the URL hash');
-  assert.match(admin, /--topbar-h/, 'tab bar offset is measured, not hard-coded');
-  assert.doesNotMatch(admin, /top:\s*69px/, 'no hard-coded 69px tab offset');
-  assert.match(admin, /max-width: 767px[^}]*\{[^}]*\.admin-tabs \{ position: fixed/s, 'tabs are fixed to the bottom on phones');
-  assert.match(admin, /safe-area-inset-bottom/, 'bottom bar respects the phone safe area');
 });
 
 // -- capture time: EXIF reader + frontend fallback order --------
