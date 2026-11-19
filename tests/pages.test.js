@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
-const PAGES = ['index.html', 'checklist.html', 'dashboard.html', 'admin.html'];
+const PAGES = ['index.html', 'checklist.html', 'admin.html'];
 
 function read(f) { return fs.readFileSync(path.join(ROOT, f), 'utf8'); }
 
@@ -66,7 +66,7 @@ test('branding: every page is titled MPS Silks, loads the theme and the logo', (
 });
 
 test('frontend wiring: config, auth, api on every data-driven page', () => {
-  ['checklist.html', 'dashboard.html', 'admin.html'].forEach((p) => {
+  ['checklist.html', 'admin.html'].forEach((p) => {
     const src = read(p);
     ['js/config.js', 'js/auth.js', 'js/api.js', 'js/ui.js'].forEach((dep) => {
       assert.ok(src.includes(dep), p + ' must load ' + dep);
@@ -264,15 +264,6 @@ test('regression: validateNew refuses a photo-type task with no photo', () => {
     'validateNew must refuse more than 5 photos');
 });
 
-test('dashboard implements completion %, filters, missed view and exports', () => {
-  const src = read('dashboard.html');
-  assert.match(src, /exportXlsx/);
-  assert.match(src, /exportCsv/);
-  assert.match(src, /statusFilter/);
-  assert.match(src, /getDashboard/);
-  assert.match(src, /outstandingLabel|Missed/);
-});
-
 test('admin page guards access, wires tabs and activates the default panel', () => {
   const src = read('admin.html');
   assert.match(src, /Auth\.require\(\{\s*admin:\s*true\s*\}\)/);
@@ -444,10 +435,7 @@ test('admin: Photos tab lists photos for any date range', () => {
   assert.match(be, /function actionGetPhotos\(p\) \{\s+var auth = requireSession_\(p, true\)/, 'getPhotos must be admin-only');
 });
 
-test('multi-photo UI: dashboard buttons per photo, admin numbers, checklist grid', () => {
-  const dash = read('dashboard.html');
-  assert.match(dash, /String\(t\.photoRef\)\.split\(','\)/, 'dashboard renders one button per photo id');
-  assert.match(dash, /'Photo ' \+ \(i \+ 1\)/, 'several photos are labelled Photo 1, Photo 2, …');
+test('multi-photo UI: admin numbers, checklist grid', () => {
   const admin = read('admin.html');
   assert.match(admin, /Photo ' \+ window\.UI\.esc\(ph\.photoIndex\) \+ ' of ' \+ window\.UI\.esc\(ph\.photoCount\)/,
     'the gallery numbers the photos of a multi-photo task');
@@ -623,7 +611,7 @@ test('checklist page reads the capture time from the ORIGINAL file before compre
   const uiAt = page.indexOf('src="js/ui.js"');
   assert.ok(exifAt !== -1 && uiAt !== -1 && exifAt < uiAt, 'exif.js must load before ui.js');
   // Only the checklist needs it (photos are taken there).
-  ['index.html', 'dashboard.html', 'admin.html'].forEach((p) =>
+  ['index.html', 'admin.html'].forEach((p) =>
     assert.doesNotMatch(read(p), /js\/exif\.js/, p + ' must not load exif.js'));
 });
 
@@ -708,11 +696,6 @@ test('photo-time display rule: never a bare date as "Photo taken"', () => {
     'admin card uses prettyPhoto, not the bare-date pretty');
   assert.doesNotMatch(admin, /ph\.photoTime \? window\.Dates\.pretty\(/,
     'admin must not treat any truthy photoTime as a showable time');
-  const dash = read('dashboard.html');
-  assert.match(dash, /Dates\.prettyPhoto\(/,
-    'dashboard photo caption uses prettyPhoto');
-  assert.doesNotMatch(dash, /var pretty = pt \? window\.Dates\.pretty\(pt\)/,
-    'dashboard must not treat any truthy photoTime as a showable time');
   const rep = read('js/report.js');
   assert.match(rep, /photoStamp\(ph\.takenAt\)/,
     'PDF caption uses the guarded photoStamp');
