@@ -25,7 +25,8 @@
     </div>
 
     <nav class="adm-nav" aria-label="Admin sections">
-      <button type="button" class="adm-nav-btn active" data-tabbtn="tasks" aria-current="page"><span class="ico" aria-hidden="true">&#9776;</span> Tasks</button>
+      <button type="button" class="adm-nav-btn active" data-tabbtn="overview" aria-current="page"><span class="ico" aria-hidden="true">&#9673;</span> Overview</button>
+      <button type="button" class="adm-nav-btn" data-tabbtn="tasks"><span class="ico" aria-hidden="true">&#9776;</span> Tasks</button>
       <button type="button" class="adm-nav-btn" data-tabbtn="users"><span class="ico" aria-hidden="true">&#128100;</span> Staff</button>
       <button type="button" class="adm-nav-btn" data-tabbtn="photos"><span class="ico" aria-hidden="true">&#128247;</span> Photos</button>
       <button type="button" class="adm-nav-btn" data-tabbtn="settings"><span class="ico" aria-hidden="true">&#9881;</span> Settings</button>
@@ -43,8 +44,39 @@
 
       <div id="pg-load" class="loading-block"><div class="spinner"></div><div class="lbl">Loading admin data...</div></div>
 
+      <!-- OVERVIEW: who is assigned, who finished, who missed -->
+      <div class="panel active" id="panel-overview">
+        <div class="panel-head">
+          <div>
+            <h2 id="ovTitle">Today</h2>
+            <div class="panel-sub" id="ovSub">Loading&hellip;</div>
+          </div>
+          <div class="ov-nav" role="group" aria-label="Choose a day">
+            <button type="button" class="btn ghost sm" id="ovPrev" aria-label="Previous day">&lsaquo;</button>
+            <input type="date" id="ovDate" aria-label="Day to view"/>
+            <button type="button" class="btn ghost sm" id="ovNext" aria-label="Next day">&rsaquo;</button>
+            <button type="button" class="btn ghost sm" id="ovToday">Today</button>
+            <button type="button" class="btn ghost sm" id="ovRefresh">Refresh</button>
+          </div>
+        </div>
+
+        <div id="ovWeek" class="ov-week" aria-label="Last 7 days"></div>
+        <div id="ovHero"></div>
+
+        <div class="ov-ctl">
+          <div class="seg" role="group" aria-label="Group by">
+            <button type="button" class="on" data-ovview="person">By person</button>
+            <button type="button" data-ovview="task">By task</button>
+          </div>
+          <input class="search-inp" id="ovSearch" type="search" placeholder="Search a person or task..." aria-label="Search people or tasks"/>
+          <select class="filter-sel" id="ovRole" aria-label="Filter by role"><option value="">All roles</option></select>
+        </div>
+
+        <div id="ovBody"></div>
+      </div>
+
       <!-- TASKS -->
-      <div class="panel active" id="panel-tasks">
+      <div class="panel" id="panel-tasks">
         <div class="panel-head">
           <div>
             <h2>Checklist Tasks</h2>
@@ -68,13 +100,7 @@
           <button type="button" class="btn" id="btnAddTask">&#43; Add Task</button>
         </div>
 
-        <div class="table-wrap adm-table-scroll" id="taskTableWrap">
-          <table class="data gtable" id="taskTable">
-            <thead>
-              <tr><th>Task</th><th>Section</th><th>Type</th><th>Frequency</th><th>Assigned</th><th>Controls</th></tr>
-            </thead>
-          </table>
-        </div>
+        <div id="taskTableWrap"><div class="tlist" id="taskTable"></div></div>
         <div class="empty" id="taskEmpty" style="display:none">No tasks match the filter.</div>
       </div>
 
@@ -99,18 +125,11 @@
           </select>
         </div>
 
-        <div class="table-wrap adm-table-scroll" id="userTableWrap">
-          <table class="data staff-table" id="userTable">
-            <thead>
-              <tr>
-                <th>Name</th><th>Role</th><th>Status</th>
-                <th class="num">Today<span class="th-sub">sub &middot; pass &middot; fail</span></th>
-                <th class="num">Last 7 days<span class="th-sub">sub &middot; pass &middot; fail</span></th>
-                <th>PIN</th><th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="userBody"></tbody>
-          </table>
+        <div id="userTableWrap" class="slist-wrap">
+          <div class="srow shead" aria-hidden="true">
+            <span>Name</span><span>Account</span><span>Today</span><span>Last 7 days</span><span></span>
+          </div>
+          <div class="slist" id="userBody"></div>
         </div>
         <div class="empty" id="userEmpty" style="display:none">No staff accounts found.</div>
       </div>
@@ -265,18 +284,19 @@ var allTasks = [], allUsers = [], settings = {};
 // ── tabs: sidebar buttons ↔ panels ↔ URL hash ─────────────────
 // Panel keys stay 'users' (panel-users / data-tabbtn) while the URL
 // hash uses #staff — HASH_OF maps between the two.
-var TABS = ['tasks', 'users', 'photos', 'settings'];
-var HASH_OF = { tasks: 'tasks', users: 'staff', photos: 'photos', settings: 'settings' };
+var CONFIG_TABS = ['tasks', 'users', 'photos', 'settings'];
+var TABS = ['overview'].concat(CONFIG_TABS);
+var HASH_OF = { overview: 'overview', tasks: 'tasks', users: 'staff', photos: 'photos', settings: 'settings' };
 
 function hashFor(key) { return HASH_OF[key] || key; }
 function keyForHash(hash) {
   var id = String(hash || '').replace(/^#/, '');
   for (var i = 0; i < TABS.length; i++) if (HASH_OF[TABS[i]] === id) return TABS[i];
-  return 'tasks';
+  return 'overview';
 }
 
 function showTab(key) {
-  if (TABS.indexOf(key) === -1) key = 'tasks';
+  if (TABS.indexOf(key) === -1) key = 'overview';
   document.querySelectorAll('[data-tabbtn]').forEach(function (b) {
     var on = b.getAttribute('data-tabbtn') === key;
     b.classList.toggle('active', on);
@@ -538,6 +558,7 @@ function loadAll() {
     renderStaff();
     if (rset.ok) { settings = rset.settings || {}; populateSettings(); }
     else { window.UI.toast(rset.error || 'Failed to load settings', 'err'); }
+    ovInit();
   });
 }
 loadAll();
@@ -581,25 +602,25 @@ function taskFreqLabel(t) {
 }
 
 function taskRow(t) {
-  var tr = document.createElement('tr');
-  tr.className = t.active ? '' : 'inactive-row';
-  var flags = '';
-  if (t.mandatory) flags += '<span class="badge maroon" title="Mandatory">M</span>';
-  if (t.photoRequired) flags += '<span class="badge gold" title="Photo required">&#128247;</span>';
+  var E = window.UI.esc;
+  var row = document.createElement('div');
+  row.className = 'trow' + (t.active ? '' : ' inactive-row');
+  var typeLbl = { yesno: 'Yes / No', rating: 'Rating', photo: 'Photo', text: 'Text' }[t.type] || t.type;
+  var chips = '<span class="badge">' + E(typeLbl) + '</span><span class="badge">' + taskFreqLabel(t) + '</span>';
+  if (t.mandatory) chips += '<span class="badge maroon">Mandatory</span>';
+  if (t.photoRequired) chips += '<span class="badge gold">Photo needed</span>';
   var assigned = (t.assignedTo && t.assignedTo.length && t.assignedTo[0] !== 'all')
-    ? window.UI.esc(t.assignedTo.join(', '))
+    ? t.assignedTo.map(function (a) { return '<span class="who">' + E(a) + '</span>'; }).join('')
     : '<span class="muted">Everyone</span>';
-  tr.innerHTML = '<td><div class="t-name">' + window.UI.esc(t.taskName) + '</div><div class="tid">' + window.UI.esc(t.taskId) + '</div></td>'
-    + '<td>' + window.UI.esc(t.section) + '</td>'
-    + '<td><span class="badge">' + window.UI.esc(t.type) + '</span>' + (flags ? '<span class="flags">' + flags + '</span>' : '') + '</td>'
-    + '<td>' + taskFreqLabel(t) + '</td>'
-    + '<td>' + assigned + '</td>'
-    + '<td><div class="ctrls">'
-    + '<button type="button" class="active-toggle ' + (t.active ? 'on' : 'off') + '" data-toggle="' + window.UI.esc(t.taskId) + '" aria-pressed="' + (t.active ? 'true' : 'false') + '" title="Toggle active"></button>'
-    + '<button type="button" class="btn sm ghost" data-edit-task="' + window.UI.esc(t.taskId) + '">Edit</button>'
-    + '<button type="button" class="menu-btn" data-menu="' + window.UI.esc(t.taskId) + '" aria-haspopup="true" aria-label="More actions for ' + window.UI.esc(t.taskId) + '">&#8943;</button>'
-    + '</div></td>';
-  return tr;
+  row.innerHTML = '<button type="button" class="active-toggle ' + (t.active ? 'on' : 'off') + '" data-toggle="' + E(t.taskId) + '" aria-pressed="' + (t.active ? 'true' : 'false') + '" aria-label="' + (t.active ? 'Active' : 'Inactive') + ' - tap to switch" title="' + (t.active ? 'Active' : 'Inactive') + '"></button>'
+    + '<div class="t-main"><div class="t-name">' + E(t.taskName) + '</div>'
+    + '<div class="t-chips">' + chips + '<span class="tid">' + E(t.taskId) + '</span></div></div>'
+    + '<div class="t-asg"><span class="t-lbl">Assigned to</span>' + assigned + '</div>'
+    + '<div class="ctrls">'
+    + '<button type="button" class="btn sm ghost" data-edit-task="' + E(t.taskId) + '">Edit</button>'
+    + '<button type="button" class="menu-btn" data-menu="' + E(t.taskId) + '" aria-haspopup="true" aria-label="More actions for ' + E(t.taskId) + '">&#8943;</button>'
+    + '</div>';
+  return row;
 }
 
 function renderTasks() {
@@ -616,10 +637,10 @@ function renderTasks() {
   var activeN = 0;
   filtered.forEach(function (t) { if (t.active) activeN++; });
   document.getElementById('taskSummary').textContent =
-    filtered.length + ' tasks · ' + activeN + ' active · ' + (filtered.length - activeN) + ' inactive';
+    filtered.length + ' tasks, ' + activeN + ' active, ' + (filtered.length - activeN) + ' inactive';
 
-  var tbl = document.getElementById('taskTable');
-  while (tbl.tBodies.length) tbl.removeChild(tbl.tBodies[0]);
+  var list = document.getElementById('taskTable');
+  list.innerHTML = '';
   var order = [], groups = {};
   filtered.forEach(function (t) {
     if (!groups[t.section]) { groups[t.section] = []; order.push(t.section); }
@@ -628,17 +649,16 @@ function renderTasks() {
   order.forEach(function (sec) {
     var rows = groups[sec];
     var folded = !!collapsedSections[sec];
-    var tb = document.createElement('tbody');
-    tb.className = 'grp' + (folded ? ' collapsed' : '');
-    tb.setAttribute('data-sec', sec);
-    var head = document.createElement('tr');
-    head.className = 'grp-row';
-    head.innerHTML = '<th colspan="6"><button type="button" class="grp-btn" aria-expanded="' + (folded ? 'false' : 'true') + '">'
+    var box = document.createElement('section');
+    box.className = 'tgrp' + (folded ? ' collapsed' : '');
+    box.setAttribute('data-sec', sec);
+    var on = 0;
+    rows.forEach(function (t) { if (t.active) on++; });
+    box.innerHTML = '<button type="button" class="grp-btn" aria-expanded="' + (folded ? 'false' : 'true') + '">'
       + '<span class="caret" aria-hidden="true">&#9660;</span> ' + window.UI.esc(sec)
-      + ' <span class="cnt">' + rows.length + '</span></button></th>';
-    tb.appendChild(head);
-    rows.forEach(function (t) { tb.appendChild(taskRow(t)); });
-    tbl.appendChild(tb);
+      + ' <span class="cnt">' + rows.length + (on === rows.length ? '' : ' (' + on + ' active)') + '</span></button>';
+    rows.forEach(function (t) { box.appendChild(taskRow(t)); });
+    list.appendChild(box);
   });
   document.getElementById('taskTableWrap').style.display = filtered.length ? '' : 'none';
   document.getElementById('taskEmpty').style.display = filtered.length ? 'none' : 'block';
@@ -658,10 +678,10 @@ document.getElementById('taskTable').addEventListener('click', function (e) {
   if (mn) { openRowMenu(mn, mn.getAttribute('data-menu')); return; }
 });
 function toggleGroup(btn) {
-  var tb = btn.closest('tbody');
-  var folded = tb.classList.toggle('collapsed');
+  var box = btn.closest('.tgrp');
+  var folded = box.classList.toggle('collapsed');
   btn.setAttribute('aria-expanded', folded ? 'false' : 'true');
-  var sec = tb.getAttribute('data-sec');
+  var sec = box.getAttribute('data-sec');
   if (folded) collapsedSections[sec] = true; else delete collapsedSections[sec];
 }
 
@@ -821,9 +841,11 @@ function own(map, name) {
   return (map && Object.prototype.hasOwnProperty.call(map, name)) ? map[name] : null;
 }
 function actCell(map, name) {
-  if (staffAct.state === 'loading') return '…';
+  if (staffAct.state === 'loading') return '<span class="muted">Loading&hellip;</span>';
   var m = own(map, name);
-  return m ? (m.submitted + ' / ' + m.passed + ' / ' + m.failed) : '—';
+  if (!m) return '<span class="muted">No activity</span>';
+  return '<b>' + window.UI.esc(m.submitted) + '</b> submitted'
+    + (m.failed ? ' <span class="act-fail">' + window.UI.esc(m.failed) + ' failed</span>' : '');
 }
 
 function loadStaffActivity() {
@@ -889,19 +911,20 @@ function populateRoleFilter() {
 function staffRow(u) {
   var name = String(u.name || '');
   var weekMap = staffAct.weekOk ? staffAct.weekMap : null;
-  var tr = document.createElement('tr');
-  tr.innerHTML = '<td><span class="st-name"><span class="u-avatar" aria-hidden="true">'
+  var tr = document.createElement('div');
+  tr.className = 'srow' + (u.active ? '' : ' is-off');
+  tr.innerHTML = '<div class="st-name"><span class="u-avatar" aria-hidden="true">'
       + window.UI.esc((name || '?').slice(0, 1).toUpperCase()) + '</span>'
-      + '<span class="t-name">' + window.UI.esc(name) + '</span></span></td>'
-    + '<td><span class="badge maroon">' + window.UI.esc(u.role || 'Staff') + '</span></td>'
-    + '<td>' + (u.active ? '<span class="badge green">Active</span>' : '<span class="badge red">Inactive</span>') + '</td>'
-    + '<td class="num">' + window.UI.esc(actCell(staffAct.todayMap, name)) + '</td>'
-    + '<td class="num">' + window.UI.esc(actCell(weekMap, name)) + '</td>'
-    + '<td>' + (u.pinSet ? '<span class="badge">Set</span>' : '<span class="badge amber">Not set</span>') + '</td>'
-    + '<td><div class="ctrls">'
+      + '<span><span class="t-name">' + window.UI.esc(name) + '</span>'
+      + '<span class="st-role">' + window.UI.esc(u.role || 'Staff') + '</span></span></div>'
+    + '<div class="st-acct">' + (u.active ? '<span class="badge green">Active</span>' : '<span class="badge red">Inactive</span>')
+      + (u.pinSet ? '' : '<span class="badge amber">No PIN</span>') + '</div>'
+    + '<div class="st-act"><span class="st-lbl">Today</span>' + actCell(staffAct.todayMap, name) + '</div>'
+    + '<div class="st-act"><span class="st-lbl">Last 7 days</span>' + actCell(weekMap, name) + '</div>'
+    + '<div class="ctrls">'
     + '<button type="button" class="btn sm ghost" data-edit-user="' + window.UI.esc(name) + '">Edit</button>'
     + '<button type="button" class="btn sm ghost" data-pin-user="' + window.UI.esc(name) + '">Reset PIN</button>'
-    + '</div></td>';
+    + '</div>';
   return tr;
 }
 
@@ -1026,6 +1049,331 @@ document.getElementById('u-pinToggle').addEventListener('click', function () {
   this.textContent = show ? 'Hide' : 'Show';
   this.setAttribute('aria-pressed', show ? 'true' : 'false');
 });
+
+// ── overview: who is assigned, who finished, who missed ───────
+// Read-only. Uses the same getDashboard / getUsers data as the rest
+// of the page: one 7-day call (week strip + today), then one
+// single-day call per other day picked. Who a task belongs to is
+// worked out the same way the backend does it (tasksForUser):
+// "all" / empty = everyone, otherwise a staff name or a role.
+var ov = { date: '', cache: {}, week: null, view: 'person', status: '', q: '', role: '', seq: 0, err: '', open: {} };
+
+function ovEl(id) { return document.getElementById(id); }
+function ovKey(r) { return r.state === 'PASS' ? 'done' : (r.state === 'FAIL' ? 'failed' : 'open'); }
+function ovOpenLabel(d) { return (d && d.outstandingLabel) || 'Pending'; }
+
+function ovChip(r, d) {
+  var k = ovKey(r);
+  if (k === 'done') return '<span class="st st-done">Done</span>';
+  if (k === 'failed') return '<span class="st st-failed">Failed</span>';
+  var lbl = ovOpenLabel(d);
+  return '<span class="st ' + (lbl === 'Missed' ? 'st-missed' : 'st-open') + '">' + window.UI.esc(lbl) + '</span>';
+}
+
+function ovWhen(r) {
+  if (!r.timestamp) return '';
+  var p = window.Dates.pretty(r.timestamp);
+  var i = p.indexOf(', ');
+  return i > -1 ? p.slice(i + 2) : '';
+}
+
+function ovAssign(r) {
+  var raw = String(r.assignedTo || 'all').toLowerCase();
+  var list = raw.split(/\s*[,;]\s*/).filter(function (x) { return x; });
+  var users = allUsers.filter(function (u) { return u.active; });
+  if (!list.length || list.indexOf('all') !== -1) return { everyone: true, users: users, labels: [] };
+  return {
+    everyone: false,
+    labels: list,
+    users: users.filter(function (u) {
+      return list.indexOf(String(u.name || '').toLowerCase()) !== -1
+        || list.indexOf(String(u.role || 'Staff').toLowerCase()) !== -1;
+    })
+  };
+}
+
+function ovInit() {
+  if (!ov.date) { ovLoad(window.Dates.today(), false); return; }
+  if (ov.cache[ov.date]) ovRender();
+}
+
+function ovLoad(date, force) {
+  var today = window.Dates.today();
+  if (!window.Dates.isValid(date) || date > today) date = today;
+  ov.date = date;
+  ov.err = '';
+  if (force) { ov.cache = {}; ov.week = null; }
+  var mySeq = ++ov.seq;
+  var jobs = [];
+  if (!ov.week) {
+    jobs.push(window.MPS_API.get('getDashboard', { dateFrom: window.Dates.addDays(today, -6), dateTo: today }).then(function (r) {
+      if (r && r.ok && r.dashboard) { ov.week = r.dashboard.trend || []; ov.cache[today] = r.dashboard; }
+      return r;
+    }));
+  }
+  if (date !== today && !ov.cache[date]) {
+    jobs.push(window.MPS_API.get('getDashboard', { dateFrom: date, dateTo: date }).then(function (r) {
+      if (r && r.ok && r.dashboard) ov.cache[date] = r.dashboard;
+      return r;
+    }));
+  }
+  if (!jobs.length) { ovRender(); return; }
+  ovRender();   // shows the loading state
+  Promise.all(jobs).then(function (rs) {
+    if (mySeq !== ov.seq) return;           // a newer pick replaced this one
+    if (!ov.cache[date]) {
+      var bad = null;
+      rs.forEach(function (r) { if (r && !r.ok && !bad) bad = r; });
+      ov.err = (bad && bad.error) || 'Could not load this day.';
+    }
+    ovRender();
+  });
+}
+
+function ovRoleOptions() {
+  var roles = [];
+  allUsers.forEach(function (u) {
+    var r = u.role || 'Staff';
+    if (u.active && roles.indexOf(r) === -1) roles.push(r);
+  });
+  roles.sort();
+  var sel = ovEl('ovRole');
+  var keep = ov.role;
+  sel.innerHTML = '<option value="">All roles</option>' + roles.map(function (r) {
+    return '<option value="' + window.UI.esc(r) + '">' + window.UI.esc(r) + '</option>';
+  }).join('');
+  if (keep && roles.indexOf(keep) !== -1) sel.value = keep; else { ov.role = ''; sel.value = ''; }
+}
+
+function ovRender() {
+  var today = window.Dates.today();
+  var d = ov.cache[ov.date];
+  var isToday = ov.date === today;
+  var dateInp = ovEl('ovDate');
+  dateInp.value = ov.date;
+  dateInp.max = today;
+  ovEl('ovNext').disabled = ov.date >= today;
+  ovEl('ovToday').disabled = isToday;
+  ovEl('ovTitle').textContent = isToday ? 'Today' : window.Dates.dayOfWeek(ov.date);
+  ovEl('ovSub').textContent = window.Dates.formatFull(ov.date)
+    + (isToday ? '' : '. Tasks nobody submitted on a past day show as Missed.');
+  document.querySelectorAll('[data-ovview]').forEach(function (b) {
+    b.classList.toggle('on', b.getAttribute('data-ovview') === ov.view);
+  });
+  ovEl('ovRole').style.display = ov.view === 'person' ? '' : 'none';
+  ovRoleOptions();
+  ovRenderWeek();
+
+  var hero = ovEl('ovHero'), body = ovEl('ovBody');
+  if (!d) {
+    hero.innerHTML = '';
+    body.innerHTML = ov.err
+      ? '<div class="empty">' + window.UI.esc(ov.err) + '<br/><button type="button" class="btn sm" id="ovRetry" style="margin-top:10px">Try again</button></div>'
+      : '<div class="loading-block"><div class="spinner"></div><div class="lbl">Loading this day...</div></div>';
+    return;
+  }
+  var rows = d.detail || [];
+  rows.forEach(function (r) { r._as = ovAssign(r); });
+  hero.innerHTML = ovHero(d);
+  body.innerHTML = !rows.length
+    ? '<div class="empty">No tasks are due on this day.</div>'
+    : (ov.view === 'person' ? ovPersonView(d, rows) : ovTaskView(d));
+}
+
+function ovRenderWeek() {
+  var el = ovEl('ovWeek');
+  if (!ov.week || !ov.week.length) { el.innerHTML = ''; return; }
+  var today = window.Dates.today();
+  el.innerHTML = ov.week.map(function (t) {
+    var short = window.Dates.formatShort(t.date).split(' ');
+    var label = t.date === today ? 'Today' : short[0] + ' ' + short[1];
+    var note;
+    if (!t.assigned) note = '<span class="wk-n quiet">No tasks</span>';
+    else if (!t.pending) note = '<span class="wk-n ok">Complete</span>';
+    else if (t.date < today) note = '<span class="wk-n bad">' + t.pending + ' missed</span>';
+    else note = '<span class="wk-n wait">' + t.pending + ' pending</span>';
+    return '<button type="button" class="wk' + (t.date === ov.date ? ' on' : '') + '" data-ovday="' + window.UI.esc(t.date) + '">'
+      + '<span class="wk-d">' + window.UI.esc(label) + '</span>'
+      + '<span class="wk-p">' + (t.assigned ? t.pct + '%' : '-') + '</span>'
+      + '<span class="wk-bar"><i style="width:' + (t.assigned ? t.pct : 0) + '%"></i></span>'
+      + note + '</button>';
+  }).join('');
+}
+
+function ovHero(d) {
+  var h = d.headline || {};
+  var a = h.assigned || 0;
+  if (!a) return '';
+  var done = h.passed || 0, fail = h.failed || 0, open = h.pending || 0;
+  var lbl = ovOpenLabel(d);
+  function seg(n, cls) { return n ? '<span class="' + cls + '" style="width:' + (n / a * 100) + '%"></span>' : ''; }
+  function flt(key, label, n, dot) {
+    return '<button type="button" class="flt' + (ov.status === key ? ' on' : '') + '" data-ovst="' + key + '">'
+      + '<i class="dot ' + dot + '"></i>' + window.UI.esc(label) + ' <b>' + n + '</b></button>';
+  }
+  return '<div class="ov-hero">'
+    + '<div class="ov-pct"><span class="ov-big">' + (h.pct || 0) + '%</span>'
+    + '<span class="ov-cap">of ' + a + ' task' + (a === 1 ? '' : 's') + ' submitted</span></div>'
+    + '<div class="meter lg' + (lbl === 'Missed' ? ' past' : '') + '">' + seg(done, 'm-d') + seg(fail, 'm-f') + '</div>'
+    + '<div class="flts">' + flt('', 'All', a, 'd-all') + flt('done', 'Done', done, 'd-done')
+    + flt('failed', 'Failed', fail, 'd-failed') + flt('open', lbl, open, lbl === 'Missed' ? 'd-missed' : 'd-open') + '</div>'
+    + '</div>';
+}
+
+function ovStatusOk(r) { return !ov.status || ovKey(r) === ov.status; }
+function ovTaskHit(r, q) { return (String(r.taskName) + ' ' + String(r.section)).toLowerCase().indexOf(q) !== -1; }
+
+function ovByLine(r, me) {
+  var k = ovKey(r);
+  if (k === 'open') return '';
+  var who = r.staffName || 'Unknown';
+  var t = ovWhen(r);
+  var text = (me && who === me) ? 'Submitted' : 'Submitted by ' + window.UI.esc(who);
+  return '<div class="by">' + text + (t ? ' at ' + window.UI.esc(t) : '') + '</div>';
+}
+function ovRemarks(r) {
+  return r.remarks ? '<div class="rmk">Remarks: ' + window.UI.esc(r.remarks) + '</div>' : '';
+}
+
+function ovPersonRow(r, d, me) {
+  return '<li class="pt-row">' + ovChip(r, d)
+    + '<div class="pt-main"><div class="pt-name">' + window.UI.esc(r.taskName) + '</div>'
+    + '<div class="pt-sec">' + window.UI.esc(r.section) + '</div>'
+    + ovByLine(r, me) + ovRemarks(r) + '</div></li>';
+}
+
+function ovPersonView(d, rows) {
+  var q = ov.q.toLowerCase();
+  var cards = [];
+  allUsers.forEach(function (u) {
+    if (!u.active) return;
+    var role = u.role || 'Staff';
+    if (ov.role && role !== ov.role) return;
+    var mine = rows.filter(function (r) {
+      return r._as.users.some(function (x) { return x.name === u.name; });
+    });
+    var nameHit = !q || String(u.name || '').toLowerCase().indexOf(q) !== -1;
+    var shown = mine.filter(function (r) { return ovStatusOk(r) && (nameHit || ovTaskHit(r, q)); });
+    if ((q || ov.status) && !shown.length) return;
+    var c = { done: 0, failed: 0, open: 0 };
+    mine.forEach(function (r) { c[ovKey(r)]++; });
+    cards.push({ u: u, role: role, mine: mine, shown: shown, c: c });
+  });
+  cards.sort(function (a, b) {
+    return b.c.open - a.c.open || b.c.failed - a.c.failed || String(a.u.name).localeCompare(String(b.u.name));
+  });
+
+  var html = '';
+  var orphans = rows.filter(function (r) {
+    return !r._as.everyone && !r._as.users.length && ovStatusOk(r) && (!q || ovTaskHit(r, q));
+  });
+  if (orphans.length) {
+    html += '<div class="pc warn"><div class="pc-top"><div class="pc-name">No active staff assigned</div>'
+      + '<div class="pc-sub">These tasks are assigned to a role or name with nobody active in it.</div></div>'
+      + '<ul class="pt">' + orphans.map(function (r) {
+        return '<li class="pt-row">' + ovChip(r, d) + '<div class="pt-main"><div class="pt-name">' + window.UI.esc(r.taskName)
+          + '</div><div class="pt-sec">Assigned to: ' + window.UI.esc(r.assignedTo) + '</div>' + ovByLine(r, '') + '</div></li>';
+      }).join('') + '</ul></div>';
+  }
+  if (!cards.length && !orphans.length) {
+    return '<div class="empty">' + (allUsers.length ? 'Nobody matches this filter.' : 'The staff list could not be loaded.') + '</div>';
+  }
+  html += '<div class="pgrid">' + cards.map(function (k) {
+    var total = k.mine.length, c = k.c, answered = c.done + c.failed;
+    var defOpen = c.open > 0 || c.failed > 0;
+    var isOpen = ov.open.hasOwnProperty(k.u.name) ? ov.open[k.u.name] : defOpen;
+    var lbl = ovOpenLabel(d);
+    function seg(n, cls) { return n ? '<span class="' + cls + '" style="width:' + (n / total * 100) + '%"></span>' : ''; }
+    var flags = '';
+    if (c.failed) flags += '<span class="st st-failed">' + c.failed + ' failed</span>';
+    if (c.open) flags += '<span class="st ' + (lbl === 'Missed' ? 'st-missed' : 'st-open') + '">' + c.open + ' ' + window.UI.esc(lbl.toLowerCase()) + '</span>';
+    if (total && !c.open && !c.failed) flags += '<span class="st st-done">All done</span>';
+    return '<details class="pc" data-pname="' + window.UI.esc(k.u.name) + '"' + (isOpen ? ' open' : '') + '>'
+      + '<summary><span class="u-avatar" aria-hidden="true">' + window.UI.esc(String(k.u.name || '?').slice(0, 1).toUpperCase()) + '</span>'
+      + '<span class="pc-who"><span class="pc-name">' + window.UI.esc(k.u.name) + '</span><span class="pc-sub">' + window.UI.esc(k.role) + '</span></span>'
+      + '<span class="pc-count">' + (total ? '<b>' + answered + '</b> of ' + total + ' submitted' : 'Nothing assigned') + '</span>'
+      + (total ? '<span class="meter' + (lbl === 'Missed' ? ' past' : '') + '">' + seg(c.done, 'm-d') + seg(c.failed, 'm-f') + '</span>' : '')
+      + (flags ? '<span class="pc-flags">' + flags + '</span>' : '')
+      + '</summary>'
+      + (k.shown.length
+        ? '<ul class="pt">' + k.shown.map(function (r) { return ovPersonRow(r, d, k.u.name); }).join('') + '</ul>'
+        : '<div class="pc-none">' + (total ? 'No tasks in this filter.' : 'No tasks are assigned to this person on this day.') + '</div>')
+      + '</details>';
+  }).join('') + '</div>';
+  return html;
+}
+
+function ovWhoChips(r) {
+  var as = r._as, did = String(r.staffName || '');
+  var users = as.users;
+  if (as.everyone && users.length > 4) return '<span class="who">Everyone (' + users.length + ')</span>';
+  if (!users.length) {
+    return as.everyone ? '<span class="who none">No active staff</span>'
+      : '<span class="who none">No active staff in ' + window.UI.esc(as.labels.join(', ')) + '</span>';
+  }
+  var out = users.slice(0, 6).map(function (u) {
+    return '<span class="who' + (u.name === did ? ' did' : '') + '">' + window.UI.esc(u.name) + '</span>';
+  }).join('');
+  if (users.length > 6) out += '<span class="who">+' + (users.length - 6) + ' more</span>';
+  return out;
+}
+
+function ovTaskView(d) {
+  var q = ov.q.toLowerCase();
+  var html = '';
+  (d.sections || []).forEach(function (sec) {
+    var all = sec.tasks || [];
+    all.forEach(function (r) { r._as = ovAssign(r); });
+    var list = all.filter(function (r) {
+      if (!ovStatusOk(r)) return false;
+      if (!q) return true;
+      return ovTaskHit(r, q) || r._as.users.some(function (u) { return String(u.name || '').toLowerCase().indexOf(q) !== -1; });
+    });
+    if (!list.length) return;
+    var lbl = ovOpenLabel(d);
+    html += '<section class="sc"><div class="sc-head"><span class="sc-name">' + window.UI.esc(sec.section) + '</span>'
+      + '<span class="sc-n">' + (sec.submitted || 0) + ' of ' + (sec.assigned || 0) + ' submitted</span></div>'
+      + list.map(function (r) {
+        return '<div class="tk-row">' + ovChip(r, d)
+          + '<div class="tk-main"><div class="pt-name">' + window.UI.esc(r.taskName) + '</div>' + ovRemarks(r) + '</div>'
+          + '<div class="tk-who"><div class="whos">' + ovWhoChips(r) + '</div>'
+          + (ovKey(r) === 'open'
+            ? '<div class="by ' + (lbl === 'Missed' ? 'miss' : 'wait') + '">' + (lbl === 'Missed' ? 'Nobody submitted this' : 'Waiting for submission') + '</div>'
+            : ovByLine(r, '')) + '</div></div>';
+      }).join('') + '</section>';
+  });
+  return html || '<div class="empty">Nothing matches this filter.</div>';
+}
+
+ovEl('ovWeek').addEventListener('click', function (e) {
+  var b = e.target.closest('[data-ovday]');
+  if (b) ovLoad(b.getAttribute('data-ovday'), false);
+});
+ovEl('ovHero').addEventListener('click', function (e) {
+  var b = e.target.closest('[data-ovst]');
+  if (!b) return;
+  var k = b.getAttribute('data-ovst');
+  ov.status = (ov.status === k) ? '' : k;
+  ovRender();
+});
+ovEl('ovBody').addEventListener('click', function (e) {
+  if (e.target.closest('#ovRetry')) ovLoad(ov.date, true);
+});
+// remember which person cards the admin opened or closed (toggle does not bubble)
+ovEl('ovBody').addEventListener('toggle', function (e) {
+  var n = e.target && e.target.getAttribute && e.target.getAttribute('data-pname');
+  if (n) ov.open[n] = e.target.open;
+}, true);
+document.querySelectorAll('[data-ovview]').forEach(function (b) {
+  b.addEventListener('click', function () { ov.view = b.getAttribute('data-ovview'); ovRender(); });
+});
+ovEl('ovSearch').addEventListener('input', function () { ov.q = this.value.trim(); ovRender(); });
+ovEl('ovRole').addEventListener('change', function () { ov.role = this.value; ovRender(); });
+ovEl('ovDate').addEventListener('change', function () { if (this.value) ovLoad(this.value, false); });
+ovEl('ovPrev').addEventListener('click', function () { ovLoad(window.Dates.addDays(ov.date, -1), false); });
+ovEl('ovNext').addEventListener('click', function () { ovLoad(window.Dates.addDays(ov.date, 1), false); });
+ovEl('ovToday').addEventListener('click', function () { ovLoad(window.Dates.today(), false); });
+ovEl('ovRefresh').addEventListener('click', function () { ovLoad(ov.date, true); });
 
 // ── settings ──────────────────────────────────────────────────
 function populateSettings() {
