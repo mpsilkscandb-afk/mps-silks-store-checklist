@@ -26,9 +26,9 @@ audit history from a dashboard — with `.xlsx` / `.csv` export.
 | Missed vs pending | Sheet has no due times → **today = Pending**, **past dates = Missed** (documented rule) |
 | Completion % | distinct assigned tasks with a valid latest submission ÷ active assigned tasks; **failed ≠ passed** |
 | Dashboard | date filters, headline stats, section & staff breakdowns, daily trend, outstanding list, remarks + photos, updates log |
-| Admin UI | add / edit / activate / delete tasks, manage staff + PINs + roles, store settings — **no code changes needed** |
+| Admin UI | read-only task list grouped by section (tasks are edited in the Google Sheet), staff management with a per-day activity view (stats, task history, photos), PIN reset, store settings — **no code changes needed** |
 | Photos | type/size validated, stored **private** in Drive, served only through authenticated `getPhoto`; **true capture time** read from the photo's EXIF before compression |
-| Admin photo gallery | Photos tab: date range + **section filter chips with counts**, tap-to-load thumbs, tap-to-enlarge, “Photo taken” vs “Submitted” times |
+| Admin photo gallery | Photos tab: date range + **section filter chips with counts** + staff filter, tap-to-load thumbs, tap-to-enlarge, “Photo taken” vs “Submitted” times |
 | PDF report | staff download an A4 PDF (summary, per-section table, photo thumbnails, page numbers) — generated **in the browser**, no server round-trip |
 | Export | `.xlsx` (primary) and `.csv` (secondary), formula-injection safe, generated client-side |
 | Audit | every submission keeps history (`Sequence: First/Update`, `Submission_ID`, update reason, timestamp) |
@@ -51,7 +51,7 @@ Requirements: **Node ≥ 18.17** (only for lint/test/build), Python 3 (optional,
 # 1. syntax-check every JS/.gs file
 npm.cmd run lint          # → node scripts/check-syntax.js
 
-# 2. run the full test suite (138 tests: core logic, dates/IST, EXIF, PDF report data, XLSX/CSV, page hygiene)
+# 2. run the full test suite (120 tests: core logic, dates/IST, EXIF, PDF report data, XLSX/CSV, page hygiene)
 npm.cmd test              # → node --test
 
 # 3. production build → dist/
@@ -82,7 +82,7 @@ mps-silks-store-checklist/
 ├── index.html            # PIN login (keypad)
 ├── checklist.html        # staff: today's tasks, validation, photos, submit
 ├── dashboard.html        # admin: stats, filters, breakdowns, trend, exports
-├── admin.html            # admin: tasks / staff / settings (server-enforced)
+├── admin.html            # admin: tasks (read-only) / staff / photos / settings (server-enforced)
 ├── css/theme.css         # maroon/gold/cream design system (+ shared C&B footer)
 ├── js/
 │   ├── config.js         # public endpoint (build-injected)
@@ -159,6 +159,6 @@ mps-silks-store-checklist/
 | Check | Result |
 |---|---|
 | `npm.cmd run lint` | ✅ 18/18 files pass syntax check |
-| `npm.cmd test` | ✅ 138/138 tests pass |
+| `npm.cmd test` | ✅ 120/120 tests pass |
 | `npm.cmd run build` | ✅ `dist/` produced (placeholder endpoint until configured) |
 | Deployment | ❌ **Not performed — intentionally.** See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). |
