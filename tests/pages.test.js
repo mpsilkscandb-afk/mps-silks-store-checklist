@@ -503,14 +503,44 @@ test('photo time flows through the whole app', () => {
   assert.match(admin, /Photo taken: /, 'admin gallery labels the capture time');
 });
 
-test('task frequency: admin form, backend rules and submit guard are wired', () => {
+test('task frequency: backend rules and submit guard are wired; admin lists it read-only', () => {
   const admin = read('admin.html');
   const api = read('backend/MPS_BACKEND.gs');
-  assert.match(admin, /id="f-frequency"/, 'admin can set a task frequency');
-  assert.match(admin, /frequency: document\.getElementById\('f-frequency'\)\.value/, 'frequency is sent when saving a task');
+  assert.match(admin, /freqLabel\(t\.frequency\)/, 'admin task list shows each task frequency');
+  assert.doesNotMatch(admin, /id="f-frequency"/, 'admin no longer edits tasks (managed in the Google Sheet)');
   assert.match(api, /tasksForUser\(res\.tasks, sess\.name, sess\.role, today\)/, 'staff checklist only lists tasks due today');
   assert.match(api, /code: 'NOT_DUE'/, 'a task that is not due cannot be submitted');
   assert.match(api, /ensureHeaders_\('Checklist_Config', \['Frequency'\]\)/, 'Frequency header is added when missing');
+});
+
+test('admin: Tasks tab is a read-only list (tasks are edited in the Google Sheet)', () => {
+  const admin = read('admin.html');
+  ['addTask', 'updateTask', 'toggleTask', 'deleteTask'].forEach((a) =>
+    assert.doesNotMatch(admin, new RegExp(a), 'admin.html must not call ' + a));
+  assert.doesNotMatch(admin, /taskDrawer|openTaskDrawer|saveTask|data-edit-task|data-del-task|active-toggle/);
+  assert.match(admin, /Checklist_Config/, 'the page tells admins where tasks are managed');
+  assert.match(admin, /mapProblems/, 'sheet mapping problems stay visible');
+  assert.match(admin, /class="tgroup"/, 'tasks are grouped by section');
+});
+
+test('admin: Staff tab shows per-day stats, history and photos for each person', () => {
+  const admin = read('admin.html');
+  assert.match(admin, /MPS_API\.get\('getDashboard', \{ dateFrom: day, dateTo: day \}\)/, 'staff stats use one dashboard day');
+  assert.match(admin, /MPS_API\.get\('getPhotos', \{ dateFrom: day, dateTo: day \}\)/, 'staff photos use the same day');
+  assert.match(admin, /data-sact="pin"/, 'Reset PIN lives in the staff detail');
+  assert.match(admin, /data-sact="toggle"/, 'Activate / Deactivate lives in the staff detail');
+  assert.match(admin, /confirm\(msg\)/, 'deactivating asks for confirmation');
+  assert.match(admin, /id="phStaff"/, 'Photos tab can be filtered by staff');
+});
+
+test('admin: tabs use URL hashes and a bottom bar on phones', () => {
+  const admin = read('admin.html');
+  assert.match(admin, /staff: 'staff'|users: 'staff'/, 'Staff tab uses #staff');
+  assert.match(admin, /history\.replaceState/, 'selected tab is kept in the URL hash');
+  assert.match(admin, /--topbar-h/, 'tab bar offset is measured, not hard-coded');
+  assert.doesNotMatch(admin, /top:\s*69px/, 'no hard-coded 69px tab offset');
+  assert.match(admin, /max-width: 767px[^}]*\{[^}]*\.admin-tabs \{ position: fixed/s, 'tabs are fixed to the bottom on phones');
+  assert.match(admin, /safe-area-inset-bottom/, 'bottom bar respects the phone safe area');
 });
 
 // -- capture time: EXIF reader + frontend fallback order --------
