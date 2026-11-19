@@ -137,7 +137,6 @@
     </div>
   </div>
   <div class="tb-right">
-    <button class="tb-btn" id="btnDash" style="display:none" onclick="location.href='dashboard.html'">Dashboard</button>
     <button class="tb-btn gold" id="btnAdmin" style="display:none" onclick="location.href='admin.html'">Admin</button>
     <button class="tb-btn" id="btnLogout">Logout</button>
   </div>
@@ -200,7 +199,6 @@ var me = window.Auth.require({});
 if (!me) return;
 window.UI.bindLogout('btnLogout');
 if (me.isAdmin) {
-  document.getElementById('btnDash').style.display = '';
   document.getElementById('btnAdmin').style.display = '';
 }
 

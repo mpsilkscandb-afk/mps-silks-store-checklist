@@ -81,7 +81,6 @@ tells you it is not configured yet.
 mps-silks-store-checklist/
 ├── index.html            # PIN login (keypad)
 ├── checklist.html        # staff: today's tasks, validation, photos, submit
-├── dashboard.html        # admin: stats, filters, breakdowns, trend, exports
 ├── admin.html            # admin: tasks (read-only) / staff / photos / settings (server-enforced)
 ├── css/theme.css         # maroon/gold/cream design system (+ shared C&B footer)
 ├── js/
@@ -145,7 +144,7 @@ mps-silks-store-checklist/
   with the vendored jsPDF; photos are fetched through the same private `getPhoto` endpoint (3 at a
   time, with progress) and re-compressed to ≤ 800 px before embedding. An admin-wide “PDF for any
   day/staff member” can be added later by calling `MPSReport.buildReportData` with a
-  `getDashboard`-style payload and `downloadReport(...)` from `dashboard.html` — no backend change.
+  `getDashboard`-style payload and `downloadReport(...)` — no backend change.
 - **The Google Sheet is the source of truth** for tasks, users, submissions and settings. The app
   never assumes a fixed column order — headers are matched by alias, unmapped rows/columns are
   *reported* (dashboard “mapping problems”, admin log), never silently dropped.

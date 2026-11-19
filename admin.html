@@ -72,7 +72,7 @@
 #panel-overview .k-missed::before { background: #FFB74D; }
 
 /* week chart + sections */
-#panel-overview .ov-row { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
+#panel-overview .ov-row { align-items: start; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
 #panel-overview .ov-card:empty { display: none; }
 #panel-overview .wk-cols { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
 #panel-overview .wk {
@@ -285,6 +285,10 @@
   .srow .st-name, .srow .ctrls { grid-column: 1 / -1; }
 }
 
+@media (max-width: 899px) {
+  .adm-nav { overflow-x: auto; scrollbar-width: none; }
+  .adm-nav .adm-nav-btn { flex: 1 0 auto; width: auto; white-space: nowrap; padding-left: 10px; padding-right: 10px; }
+}
 </style>
 </head>
 <body>
@@ -303,6 +307,7 @@
 
     <nav class="adm-nav" aria-label="Admin sections">
       <button type="button" class="adm-nav-btn active" data-tabbtn="overview" aria-current="page"><span class="ico" aria-hidden="true">&#9673;</span> Overview</button>
+      <a class="adm-nav-btn" href="checklist.html" id="navChecklist"><span class="ico" aria-hidden="true">&#9745;</span> Checklist</a>
       <button type="button" class="adm-nav-btn" data-tabbtn="tasks"><span class="ico" aria-hidden="true">&#9776;</span> Tasks</button>
       <button type="button" class="adm-nav-btn" data-tabbtn="users"><span class="ico" aria-hidden="true">&#128100;</span> Staff</button>
       <button type="button" class="adm-nav-btn" data-tabbtn="photos"><span class="ico" aria-hidden="true">&#128247;</span> Photos</button>
@@ -311,7 +316,6 @@
 
     <hr class="adm-div"/>
     <div class="adm-side-foot">
-      <a class="adm-nav-btn" href="dashboard.html"><span class="ico" aria-hidden="true">&larr;</span> Dashboard</a>
       <button type="button" class="adm-nav-btn" id="btnLogout">Logout</button>
     </div>
   </aside>
