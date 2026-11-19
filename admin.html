@@ -2,33 +2,104 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <title>Admin — MPS Silks Checklist</title>
 <meta name="theme-color" content="#7A1420"/>
 <link rel="icon" type="image/png" href="images/mps-logo.png"/>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="css/theme.css"/>
 <style>
-  .panel { display: none; padding: 16px; max-width: 980px; margin: 0 auto; padding-bottom: 60px; }
+  /* ── Admin layout: one page template for every tab ─────────────
+     page-head (title + purpose) → summary line → filters → content.
+     Laptop: tabs under the top bar. Phone: tabs fixed at the bottom. */
+  :root { --topbar-h: 62px; --tabbar-h: 62px; }
+  button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, .ph-view:focus-visible {
+    outline: 2px solid var(--gold-dark); outline-offset: 2px;
+  }
+
+  .admin-tabs { top: var(--topbar-h); padding: 0 max(16px, calc((100% - 1100px) / 2)); }
+  .admin-tabs .tab { flex: 0 0 auto; padding: 13px 22px; font-size: 13px; }
+  .admin-tabs .tab svg { width: 17px; height: 17px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  .panel { display: none; padding: 20px 16px 40px; max-width: 1100px; margin: 0 auto; }
   .panel.active { display: block; }
-  .panel-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 12px; gap: 10px; flex-wrap: wrap; }
-  .ph-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
-  .ph-filter label { font-size: 12px; font-weight: 700; color: var(--ink-60); display: flex; align-items: center; gap: 6px; }
-  .ph-filter input[type=date] { padding: 7px 8px; border: 1.5px solid var(--border); border-radius: var(--r-sm); background: var(--paper); font-size: 13px; }
+
+  .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .page-head h2 { font-family: var(--font-head); font-size: 22px; line-height: 1.2; color: var(--maroon); }
+  .page-head p { font-size: 12.5px; color: var(--ink-60); margin-top: 3px; max-width: 60ch; }
+  .page-head .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .sum-item { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r-sm); padding: 7px 12px; font-size: 12px; color: var(--ink-60); }
+  .sum-item b { font-size: 17px; color: var(--maroon); margin-right: 5px; font-weight: 700; }
+
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+  .filter-bar > * { min-height: 40px; }
+  .search-inp { flex: 1; min-width: 170px; padding: 9px 12px; border-radius: var(--r-sm); border: 1.5px solid var(--border-strong); font-size: 13px; background: var(--paper); }
+  .filter-sel, .filter-bar input[type=date] { padding: 9px 10px; border-radius: var(--r-sm); border: 1.5px solid var(--border-strong); font-size: 13px; background: var(--paper); color: var(--ink); }
+  .filter-bar .btn { min-height: 40px; }
+  .daybar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .daybar .nav-btn { width: 40px; padding: 0; font-size: 18px; line-height: 1; }
+  .quick { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .note { background: var(--gold-pale); border: 1.5px solid var(--border-strong); border-radius: var(--r-sm); padding: 9px 12px; font-size: 12.5px; color: var(--ink); margin-bottom: 14px; }
+  .map-problems { background: var(--amber-l); border: 1.5px solid var(--amber); border-radius: var(--r-sm); padding: 10px 12px; font-size: 12px; color: var(--amber); margin-bottom: 14px; }
+  .map-problems li { margin-left: 16px; margin-top: 3px; }
+  .state-msg { background: var(--paper); border: 1.5px dashed var(--border-strong); border-radius: var(--r); padding: 26px 16px; text-align: center; font-size: 13px; color: var(--ink-60); }
+
+  /* tasks — read-only, grouped by section */
+  .tgroup { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); margin-bottom: 12px; overflow: hidden; }
+  .tgroup > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; font-family: var(--font-head); font-size: 16px; color: var(--maroon); background: var(--ivory); }
+  .tgroup > summary::-webkit-details-marker { display: none; }
+  .tgroup > summary::before { content: '▸'; font-size: 12px; transition: transform .15s; }
+  .tgroup[open] > summary::before { transform: rotate(90deg); }
+  .tgroup .cnt { margin-left: auto; font-family: var(--font-body); font-size: 11.5px; color: var(--ink-60); font-weight: 500; }
+  .trow { border-top: 1px solid var(--border); }
+  .trow > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; flex-wrap: wrap; }
+  .trow > summary::-webkit-details-marker { display: none; }
+  .trow > summary:hover { background: var(--gold-pale); }
+  .trow.off > summary .tname { color: var(--ink-60); text-decoration: line-through; text-decoration-color: var(--ink-30); }
+  .tname { flex: 1 1 240px; font-size: 13.5px; font-weight: 500; min-width: 0; }
+  .tbadges { display: flex; gap: 5px; flex-wrap: wrap; }
+  .tdetail { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 16px; padding: 4px 14px 14px; font-size: 12.5px; }
+  .tdetail dt { font-size: 11px; color: var(--ink-60); font-weight: 700; }
+  .tdetail dd { margin-top: 1px; }
+  .tid { font-family: monospace; }
+
+  /* staff — list + detail */
+  .staff-layout { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+  .staff-layout .s-detail { display: none; }
+  .staff-layout.has-detail .s-list { display: none; }
+  .staff-layout.has-detail .s-detail { display: block; }
+  .scard { width: 100%; text-align: left; background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); padding: 12px; display: flex; align-items: center; gap: 12px; margin-bottom: 10px; min-height: 64px; }
+  .scard:hover { background: var(--gold-pale); }
+  .scard.sel { border-color: var(--maroon); background: var(--maroon-l); }
+  .scard.off { opacity: .6; }
+  .u-avatar { width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0; background: var(--maroon); color: #FFF8E7; border: 1.5px solid var(--gold-dark); font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .u-info { flex: 1; min-width: 0; }
+  .u-name { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .u-meta { font-size: 11.5px; margin-top: 2px; color: var(--ink-60); }
+  .u-stat { font-size: 11.5px; text-align: right; color: var(--ink-60); flex-shrink: 0; }
+  .u-stat b { color: var(--ink); font-size: 15px; display: block; }
+  .dot-on { color: var(--green); } .dot-off { color: var(--red); }
+  .s-detail .card-pad { padding: 16px; }
+  .d-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .d-top h3 { font-family: var(--font-head); font-size: 19px; color: var(--maroon); line-height: 1.2; }
+  .d-acts { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
+  .btn.warn { background: var(--paper); color: var(--red); border: 1.5px solid var(--red); }
+  .btn.back { margin-bottom: 12px; }
+  .d-h { font-family: var(--font-head); font-size: 15.5px; color: var(--maroon); margin: 18px 0 8px; padding-bottom: 5px; border-bottom: 1.5px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .d-task { padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .d-task:last-child { border-bottom: 0; }
+  .d-task .t1 { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+  .d-task .t2 { font-size: 11.5px; color: var(--ink-60); margin-top: 2px; }
+
+  /* photos */
   .ph-info { font-size: 12px; color: var(--ink-60); margin-bottom: 10px; }
-  .ph-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
-  .ph-chip {
-    padding: 6px 13px; border-radius: 16px; font-size: 11.5px; font-weight: 700;
-    background: var(--paper); color: var(--ink-60); border: 1.5px solid var(--border-strong);
-    transition: background .12s;
-  }
+  .ph-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+  .ph-chip { padding: 8px 14px; border-radius: 18px; font-size: 12px; font-weight: 700; background: var(--paper); color: var(--ink-60); border: 1.5px solid var(--border-strong); }
   .ph-chip.on { background: var(--maroon-l); color: var(--maroon); border-color: var(--maroon); }
-  .ph-sec-head {
-    grid-column: 1 / -1;
-    font-family: var(--font-head); font-size: 15.5px; color: var(--maroon);
-    margin-top: 8px; padding-bottom: 5px; border-bottom: 1.5px solid var(--border);
-    display: flex; align-items: center; gap: 8px;
-  }
+  .ph-sec-head { grid-column: 1 / -1; font-family: var(--font-head); font-size: 15.5px; color: var(--maroon); margin-top: 8px; padding-bottom: 5px; border-bottom: 1.5px solid var(--border); display: flex; align-items: center; gap: 8px; }
   .ph-sec-n { font-family: var(--font-body); font-size: 10.5px; font-weight: 700; background: var(--ink-10); color: var(--ink-60); border-radius: 10px; padding: 1px 8px; }
   .ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
   .ph-card { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); padding: 10px; }
@@ -38,38 +109,33 @@
   .ph-card .ph-badge { margin: 6px 0 8px; }
   .ph-card .ph-view { width: 100%; min-height: 90px; display: flex; align-items: center; justify-content: center; background: var(--ivory); border-radius: var(--r-sm); font-size: 12px; font-weight: 700; color: var(--maroon); cursor: pointer; text-align: center; }
   .ph-card .ph-view img { width: 100%; border-radius: var(--r-sm); display: block; }
-  .panel-head h2 { font-family: var(--font-head); font-size: 19px; color: var(--maroon); }
-  .filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-  .search-inp { flex: 1; min-width: 170px; padding: 9px 12px; border-radius: var(--r-sm); border: 1.5px solid var(--border-strong); font-size: 13px; background: var(--paper); }
-  .filter-sel { padding: 9px 10px; border-radius: var(--r-sm); border: 1.5px solid var(--border-strong); font-size: 12.5px; background: var(--paper); }
-  .tid { font-size: 10.5px; font-weight: 700; color: var(--ink-60); font-family: monospace; }
-  .inactive-row td { opacity: .45; }
-  .active-toggle { width: 38px; height: 21px; border-radius: 11px; cursor: pointer; position: relative; transition: background .2s; border: 0; }
-  .active-toggle.on { background: var(--green); }
-  .active-toggle.off { background: var(--ink-30); }
-  .active-toggle::after { content: ''; position: absolute; top: 2.5px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .2s; }
-  .active-toggle.on::after { left: 19px; }
-  .active-toggle.off::after { left: 3px; }
-  .user-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
-  .user-card { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); padding: 14px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow); }
-  .u-avatar {
-    width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
-    background: var(--maroon); color: #FFF8E7; border: 1.5px solid var(--gold-dark);
-    font-size: 17px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+
+  .setting-card { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); padding: 18px; box-shadow: var(--shadow); max-width: 560px; }
+
+  .cb-footer { margin: 12px auto 24px; }
+
+  @media (min-width: 900px) {
+    .staff-layout { grid-template-columns: minmax(280px, 360px) 1fr; }
+    .staff-layout .s-detail { display: block; }
+    .staff-layout.has-detail .s-list { display: block; }
+    .btn.back { display: none; }
+    .staff-layout .s-detail:empty::before { content: 'Select a staff member to see their day.'; display: block; padding: 40px 16px; text-align: center; color: var(--ink-60); font-size: 13px; border: 1.5px dashed var(--border-strong); border-radius: var(--r); }
   }
-  .u-info { flex: 1; min-width: 0; }
-  .u-name { font-size: 14px; font-weight: 700; }
-  .u-meta { font-size: 10.5px; margin-top: 3px; color: var(--ink-60); }
-  .u-actions { display: flex; flex-direction: column; gap: 5px; }
-  .setting-card { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); padding: 16px; box-shadow: var(--shadow); }
-  .setting-card h3 { font-size: 13.5px; font-weight: 700; color: var(--maroon); margin-bottom: 12px; }
-  .map-problems { background: var(--amber-l); border: 1.5px solid var(--amber); border-radius: var(--r-sm); padding: 10px 12px; font-size: 12px; color: var(--amber); margin-bottom: 12px; }
-  .map-problems li { margin-left: 16px; margin-top: 3px; }
+  /* phone: tabs become a fixed bottom bar */
+  @media (max-width: 767px) {
+    .admin-tabs { position: fixed; top: auto; bottom: 0; left: 0; right: 0; padding: 0 0 env(safe-area-inset-bottom, 0px); border-bottom: 0; border-top: 2px solid var(--border); z-index: 95; }
+    .admin-tabs .tab { flex: 1; flex-direction: column; gap: 3px; padding: 8px 4px 7px; font-size: 11px; border-bottom: 0; border-top: 3px solid transparent; margin: 0; min-height: var(--tabbar-h); justify-content: center; }
+    .admin-tabs .tab.active { border-top-color: var(--gold); }
+    .panel { padding-bottom: calc(var(--tabbar-h) + 28px + env(safe-area-inset-bottom, 0px)); }
+    #toast { bottom: calc(var(--tabbar-h) + 14px + env(safe-area-inset-bottom, 0px)); }
+    .tb-btn { padding: 7px 10px; }
+    .page-head h2 { font-size: 20px; }
+  }
 </style>
 </head>
 <body>
 
-<div class="topbar">
+<div class="topbar" id="topbar">
   <div class="tb-left">
     <div class="tb-logo-chip"><img src="images/mps-logo.png" alt="MPS Silks"/></div>
     <div style="min-width:0">
@@ -83,53 +149,69 @@
   </div>
 </div>
 
-<div class="tabs" style="top:69px">
-  <button class="tab active" data-tabbtn="tasks">&#9776; Tasks</button>
-  <button class="tab" data-tabbtn="users">&#128100; Staff</button>
-  <button class="tab" data-tabbtn="photos">&#128247; Photos</button>
-  <button class="tab" data-tabbtn="settings">&#9881; Settings</button>
-</div>
+<nav class="tabs admin-tabs" aria-label="Admin sections">
+  <button class="tab active" data-tabbtn="tasks" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>Tasks</button>
+  <button class="tab" data-tabbtn="users" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.2a3 3 0 010 5.6M18 14.4c1.8.8 3 2.6 3 5.6"/></svg>Staff</button>
+  <button class="tab" data-tabbtn="photos" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.4"/></svg>Photos</button>
+  <button class="tab" data-tabbtn="settings" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>Settings</button>
+</nav>
 
 <div id="pg-load" class="loading-block"><div class="spinner"></div><div class="lbl">Loading admin data...</div></div>
 
-<!-- TASKS -->
+<!-- TASKS (read-only) -->
 <div class="panel active" id="panel-tasks">
-  <div class="panel-head"><h2>Checklist Tasks</h2><button class="btn sm" onclick="openTaskDrawer()">&#43; Add Task</button></div>
+  <div class="page-head">
+    <div><h2>Checklist tasks</h2><p>Tasks are managed in the Google Sheet (Checklist_Config). This list shows what staff will see.</p></div>
+    <div class="acts"><button class="btn sm ghost" id="taskRefresh">Refresh</button></div>
+  </div>
   <div id="mapProblems"></div>
+  <div class="summary" id="taskSummary"></div>
   <div class="filter-bar">
-    <input class="search-inp" id="taskSearch" placeholder="&#128269; Search tasks..." oninput="renderTasks()"/>
-    <select class="filter-sel" id="secFilter" onchange="renderTasks()"><option value="">All sections</option></select>
-    <select class="filter-sel" id="statusFilter" onchange="renderTasks()">
-      <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option>
+    <input class="search-inp" id="taskSearch" type="search" placeholder="Search tasks" aria-label="Search tasks"/>
+    <select class="filter-sel" id="secFilter" aria-label="Section"><option value="">All sections</option></select>
+    <select class="filter-sel" id="statusFilter" aria-label="Status">
+      <option value="">All tasks</option><option value="active">Active</option><option value="inactive">Inactive</option>
     </select>
   </div>
-  <div class="table-wrap">
-    <table class="data" style="min-width:760px">
-      <thead><tr><th>ID</th><th>Section</th><th>Task</th><th>Type</th><th>Frequency</th><th>Flags</th><th>Assigned</th><th>Active</th><th>Actions</th></tr></thead>
-      <tbody id="taskBody"></tbody>
-    </table>
-  </div>
-  <div class="empty" id="taskEmpty" style="display:none">No tasks match the filter.</div>
+  <div id="taskGroups"></div>
 </div>
 
-<!-- USERS -->
+<!-- STAFF -->
 <div class="panel" id="panel-users">
-  <div class="panel-head"><h2>Staff Accounts</h2><button class="btn sm" onclick="openUserDrawer()">&#43; Add Staff</button></div>
-  <p style="font-size:11.5px;color:var(--ink-60);margin-bottom:12px">PINs are stored securely on the server and are never displayed here. Use “Reset PIN” to set a new one.</p>
-  <div class="user-grid" id="userGrid"></div>
-  <div class="empty" id="userEmpty" style="display:none">No staff accounts yet.</div>
+  <div class="page-head">
+    <div><h2>Staff</h2><p>Who can log in, and what each person did on a day.</p></div>
+    <div class="acts"><button class="btn sm" onclick="openUserDrawer()">Add staff</button></div>
+  </div>
+  <div class="summary" id="userSummary"></div>
+  <div class="filter-bar">
+    <div class="daybar">
+      <button class="btn sm ghost nav-btn" id="sdPrev" aria-label="Previous day">&#8249;</button>
+      <input type="date" id="sDay" aria-label="Day"/>
+      <button class="btn sm ghost nav-btn" id="sdNext" aria-label="Next day">&#8250;</button>
+    </div>
+    <div class="quick"><button class="btn sm ghost" id="sdToday">Today</button></div>
+  </div>
+  <div class="staff-layout" id="staffLayout">
+    <div class="s-list"><div id="userGrid"></div><div class="state-msg" id="userEmpty" style="display:none">No staff accounts yet. Use “Add staff” to create the first one.</div></div>
+    <div class="s-detail" id="staffDetail"></div>
+  </div>
 </div>
 
 <!-- PHOTOS -->
 <div class="panel" id="panel-photos">
-  <div class="panel-head"><h2>Uploaded Photos</h2></div>
-  <div class="ph-filter">
-    <label>From <input type="date" id="phFrom"/></label>
-    <label>To <input type="date" id="phTo"/></label>
+  <div class="page-head">
+    <div><h2>Photos</h2><p>Photos staff took while completing tasks, grouped by section.</p></div>
+  </div>
+  <div class="filter-bar">
+    <label class="quick" style="align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--ink-60)">From <input type="date" id="phFrom" class="filter-sel"/></label>
+    <label class="quick" style="align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--ink-60)">To <input type="date" id="phTo" class="filter-sel"/></label>
     <button class="btn sm" id="phShow">Show</button>
-    <button class="btn sm ghost" data-phq="0">Today</button>
-    <button class="btn sm ghost" data-phq="6">Last 7 days</button>
-    <button class="btn sm ghost" data-phq="29">Last 30 days</button>
+    <div class="quick">
+      <button class="btn sm ghost" data-phq="0">Today</button>
+      <button class="btn sm ghost" data-phq="6">Last 7 days</button>
+      <button class="btn sm ghost" data-phq="29">Last 30 days</button>
+    </div>
+    <select class="filter-sel" id="phStaff" aria-label="Staff"><option value="">All staff</option></select>
   </div>
   <div id="phInfo" class="ph-info"></div>
   <div id="phChips" class="ph-chips"></div>
@@ -138,16 +220,17 @@
 
 <!-- SETTINGS -->
 <div class="panel" id="panel-settings">
-  <div class="panel-head"><h2>Settings</h2></div>
-  <div class="setting-card" style="max-width:520px">
-    <h3>&#127981; Store information</h3>
-    <div class="field"><label>Store name</label><input id="s-storeName" type="text"/></div>
-    <div class="field"><label>Location</label><input id="s-storeLocation" type="text"/></div>
+  <div class="page-head">
+    <div><h2>Settings</h2><p>Store details shown to staff.</p></div>
+  </div>
+  <div class="setting-card">
+    <div class="field"><label for="s-storeName">Store name</label><input id="s-storeName" type="text"/></div>
+    <div class="field"><label for="s-storeLocation">Location</label><input id="s-storeLocation" type="text"/></div>
     <div class="grid-2">
-      <div class="field"><label>Opening time</label><input id="s-openingTime" type="time"/></div>
-      <div class="field"><label>Closing time</label><input id="s-closingTime" type="time"/></div>
+      <div class="field"><label for="s-openingTime">Opening time</label><input id="s-openingTime" type="time"/></div>
+      <div class="field"><label for="s-closingTime">Closing time</label><input id="s-closingTime" type="time"/></div>
     </div>
-    <button class="btn" onclick="saveSettings()">&#10003; Save Settings</button>
+    <button class="btn" onclick="saveSettings()">Save settings</button>
   </div>
 </div>
 
@@ -155,58 +238,23 @@
   <img src="images/cb-logo.png" alt="Consulting &amp; Beyond" onerror="this.style.display='none'"/>
 </div>
 
-<!-- TASK DRAWER -->
-<div class="overlay" id="taskOverlay" onclick="closeTaskDrawer()"></div>
-<div class="drawer" id="taskDrawer">
-  <div class="drawer-handle"></div>
-  <div class="drawer-title" id="taskDrawerTitle">Add Task</div>
-  <input type="hidden" id="editTaskId"/>
-  <div class="field"><label>Section</label>
-    <select id="f-section" onchange="checkNewSec()"></select>
-  </div>
-  <div class="field" id="newSecRow" style="display:none"><label>New section name</label><input id="f-newSection" type="text" placeholder="e.g. Evening Checks"/></div>
-  <div class="field"><label>Task name</label><input id="f-taskName" type="text" placeholder="Describe the task..."/></div>
-  <div class="grid-2">
-    <div class="field"><label>Type</label>
-      <select id="f-type"><option value="yesno">Yes / No</option><option value="rating">Rating (1–5)</option><option value="photo">Photo</option><option value="text">Text</option></select>
-    </div>
-    <div class="field"><label>Mandatory</label><select id="f-mandatory"><option value="Yes">Yes</option><option value="No">No</option></select></div>
-  </div>
-  <div class="grid-2">
-    <div class="field"><label>Photo required</label><select id="f-photo"><option value="No">No</option><option value="Yes">Yes</option></select></div>
-    <div class="field"><label>Active</label><select id="f-active"><option value="Yes">Yes</option><option value="No">No</option></select></div>
-  </div>
-  <div class="field"><label>Frequency</label>
-    <select id="f-frequency"><option value="Daily">Daily</option><option value="Weekly">Weekly (every Friday)</option><option value="Monthly">Monthly (the 28th)</option></select>
-  </div>
-  <div class="field"><label>Role / assigned to (optional)</label>
-    <input id="f-assignedTo" type="text" list="roleChoices" placeholder="Leave empty for: everyone"/>
-    <datalist id="roleChoices"><option value="Manager"></option><option value="HR"></option><option value="Staff"></option></datalist>
-    <span class="hint">Pick a role (Manager, HR, Staff) to show this task only to that role. Several roles or staff names: separate with commas. Empty = visible to everyone.</span>
-  </div>
-  <div class="drawer-btns">
-    <button class="btn ghost" onclick="closeTaskDrawer()">Cancel</button>
-    <button class="btn" onclick="saveTask()">&#10003; Save Task</button>
-  </div>
-</div>
-
-<!-- USER DRAWER -->
+<!-- STAFF DRAWER (add / edit / reset PIN) -->
 <div class="overlay" id="userOverlay" onclick="closeUserDrawer()"></div>
 <div class="drawer" id="userDrawer">
   <div class="drawer-handle"></div>
-  <div class="drawer-title" id="userDrawerTitle">Add Staff</div>
+  <div class="drawer-title" id="userDrawerTitle">Add staff</div>
   <input type="hidden" id="editUserName"/>
-  <div class="field"><label>Full name</label><input id="u-name" type="text" placeholder="e.g. Ramesh Kumar"/></div>
-  <div class="field"><label id="u-pinLabel">PIN (4 digits)</label><input id="u-pin" type="password" inputmode="numeric" maxlength="4" placeholder="Enter PIN"/></div>
+  <div class="field"><label for="u-name">Full name</label><input id="u-name" type="text" placeholder="e.g. Ramesh Kumar"/></div>
+  <div class="field"><label id="u-pinLabel">PIN (4 digits)</label><input id="u-pin" type="password" inputmode="numeric" maxlength="4" placeholder="Enter PIN" aria-labelledby="u-pinLabel"/><span class="hint" id="u-pinHint">PINs are stored securely and never shown.</span></div>
   <div class="grid-2">
-    <div class="field"><label>Role</label>
+    <div class="field"><label for="u-role">Role</label>
       <select id="u-role"><option value="Staff">Staff</option><option value="Manager">Manager</option><option value="HR">HR</option><option value="Admin">Admin</option></select>
     </div>
-    <div class="field"><label>Status</label><select id="u-active"><option value="Yes">Active</option><option value="No">Inactive</option></select></div>
+    <div class="field"><label for="u-active">Status</label><select id="u-active"><option value="Yes">Active</option><option value="No">Inactive</option></select></div>
   </div>
   <div class="drawer-btns">
     <button class="btn ghost" onclick="closeUserDrawer()">Cancel</button>
-    <button class="btn" onclick="saveUser()">&#10003; Save</button>
+    <button class="btn" onclick="saveUser()">Save</button>
   </div>
 </div>
 
@@ -232,129 +280,75 @@ if (!me) return;
 window.UI.bindLogout('btnLogout');
 window.UI.fillIdentity('tbSub', me);
 
+var esc = window.UI.esc;
 var allTasks = [], allUsers = [], settings = {};
+function $(id) { return document.getElementById(id); }
 
-// ── tabs ──────────────────────────────────────────────────────
+// keep the tab bar glued under the top bar without a hard-coded offset
+function syncBars() {
+  var tb = $('topbar');
+  if (tb) document.documentElement.style.setProperty('--topbar-h', tb.offsetHeight + 'px');
+}
+syncBars();
+window.addEventListener('resize', syncBars);
+
+// ── tabs (hash: #tasks #staff #photos #settings) ──────────────
+var TABS = ['tasks', 'users', 'photos', 'settings'];
+var HASH = { tasks: 'tasks', users: 'staff', photos: 'photos', settings: 'settings' };
+function tabFromHash() {
+  var h = String(location.hash || '').replace('#', '');
+  for (var i = 0; i < TABS.length; i++) if (HASH[TABS[i]] === h) return TABS[i];
+  return 'tasks';
+}
+function showTab(tab, keepHash) {
+  document.querySelectorAll('[data-tabbtn]').forEach(function (x) {
+    var on = x.getAttribute('data-tabbtn') === tab;
+    x.classList.toggle('active', on);
+    x.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  TABS.forEach(function (t) { $('panel-' + t).classList.toggle('active', t === tab); });
+  if (!keepHash && window.history && history.replaceState) history.replaceState(null, '', '#' + HASH[tab]);
+  if (tab === 'photos' && !phLoaded) { phSetRange(6); loadPhotos(); }
+  if (tab === 'users') ensureStaffDay();
+  window.scrollTo(0, 0);
+}
 document.querySelectorAll('[data-tabbtn]').forEach(function (b) {
-  b.addEventListener('click', function () {
-    var tab = b.getAttribute('data-tabbtn');
-    document.querySelectorAll('[data-tabbtn]').forEach(function (x) { x.classList.toggle('active', x === b); });
-    ['tasks', 'users', 'photos', 'settings'].forEach(function (t) {
-      document.getElementById('panel-' + t).classList.toggle('active', t === tab);
-    });
-  });
+  b.addEventListener('click', function () { showTab(b.getAttribute('data-tabbtn')); });
 });
+window.addEventListener('hashchange', function () { showTab(tabFromHash(), true); });
 
-// ── photos gallery (all days, not just today) ─────────────────
-// Date range on top; below it one filter chip per section ("All (n)" +
-// "Store Opening (12)"). "All" groups the grid under section headings;
-// a section chip shows only that section. The chosen chip survives a
-// date-range change as long as the section still has photos.
-var phLoaded = false;
-var phPhotos = [];      // last response (already newest-first)
-var phSelected = '';    // '' = All
-function phSetRange(daysBack) {
-  var today = window.Dates.today();
-  document.getElementById('phTo').value = today;
-  document.getElementById('phFrom').value = window.Dates.addDays(today, -daysBack);
-}
-function phSectionOf(ph) { return String(ph.section || '').trim() || 'General'; }
-// Unique sections, biggest photo count first (ties by name).
-function phSections(list) {
-  var counts = {};
-  list.forEach(function (p) { var s = phSectionOf(p); counts[s] = (counts[s] || 0) + 1; });
-  return Object.keys(counts).sort(function (a, b) {
-    return counts[b] - counts[a] || a.localeCompare(b);
-  });
-}
-function loadPhotos() {
-  var from = document.getElementById('phFrom').value;
-  var to = document.getElementById('phTo').value;
-  var info = document.getElementById('phInfo');
-  info.textContent = 'Loading photos...';
-  document.getElementById('phChips').innerHTML = '';
-  document.getElementById('phGrid').innerHTML = '';
-  window.MPS_API.get('getPhotos', { dateFrom: from, dateTo: to }).then(function (r) {
-    if (!r.ok) { info.textContent = r.error || 'Could not load photos.'; return; }
-    phLoaded = true;
-    phPhotos = r.photos || [];
-    info.textContent = r.total + ' photo' + (r.total === 1 ? '' : 's') + ' from ' + r.dateFrom + ' to ' + r.dateTo
-      + (r.truncated ? ' (showing the newest ' + phPhotos.length + ' — narrow the dates to see the rest)' : '')
-      + '. Tap a photo box to load it.';
-    // keep the selected chip when its section still exists in the new range
-    if (phSelected && phSections(phPhotos).indexOf(phSelected) === -1) phSelected = '';
-    renderPhChips();
-    renderPhotos();
-  });
-}
-function renderPhChips() {
-  var el = document.getElementById('phChips');
-  var counts = phSections(phPhotos);
-  var html = '<button class="ph-chip' + (phSelected ? '' : ' on') + '" data-phsec="">All (' + phPhotos.length + ')</button>';
-  counts.forEach(function (s) {
-    var n = 0;
-    phPhotos.forEach(function (p) { if (phSectionOf(p) === s) n++; });
-    html += '<button class="ph-chip' + (phSelected === s ? ' on' : '') + '" data-phsec="' + window.UI.esc(s) + '">'
-      + window.UI.esc(s) + ' (' + n + ')</button>';
-  });
-  el.innerHTML = html;
-}
-document.getElementById('phChips').addEventListener('click', function (e) {
-  var chip = e.target.closest('.ph-chip');
-  if (!chip) return;
-  phSelected = chip.getAttribute('data-phsec') || '';
-  renderPhChips();
-  renderPhotos();
-});
-function phStatusBadge(st) {
+// ── shared helpers ────────────────────────────────────────────
+function nameKey(s) { return String(s || '').trim().toLowerCase(); }
+function statusBadge(st) {
   var s = String(st || '').toUpperCase();
   if (s === 'FAIL') return '<span class="badge red">Failed</span>';
   if (s === 'OK' || s === 'PASS') return '<span class="badge green">OK</span>';
   if (!s) return '<span class="badge">Not rated</span>';
-  return '<span class="badge amber">' + window.UI.esc(s) + '</span>';
+  return '<span class="badge amber">' + esc(s) + '</span>';
 }
+function summary(el, items) {
+  el.innerHTML = items.map(function (i) { return '<div class="sum-item"><b>' + i[0] + '</b>' + esc(i[1]) + '</div>'; }).join('');
+}
+
+// ── photo cards (used by Photos tab and Staff detail) ─────────
+function phSectionOf(ph) { return String(ph.section || '').trim() || 'General'; }
 function phCard(ph) {
   var card = document.createElement('div');
   card.className = 'ph-card';
   var takenTxt = window.Dates.prettyPhoto(ph.photoTime);
   var taken = takenTxt ? 'Photo taken: ' + takenTxt : 'Photo time not recorded';
   var submittedTxt = ph.timestamp ? window.Dates.pretty(ph.timestamp) : (ph.date || '');
-  card.innerHTML = '<div class="ph-task">' + window.UI.esc(ph.taskName || ph.taskId) + '</div>'
-    + '<div class="ph-meta">' + window.UI.esc(ph.staffName || 'Unknown') + (ph.section ? ' · ' + window.UI.esc(ph.section) : '') + '</div>'
-    + '<div class="ph-date">' + window.UI.esc(taken) + '</div>'
-    + '<div class="ph-meta">Submitted ' + window.UI.esc(submittedTxt) + '</div>'
+  card.innerHTML = '<div class="ph-task">' + esc(ph.taskName || ph.taskId) + '</div>'
+    + '<div class="ph-meta">' + esc(ph.staffName || 'Unknown') + (ph.section ? ' · ' + esc(ph.section) : '') + '</div>'
+    + '<div class="ph-date">' + esc(taken) + '</div>'
+    + '<div class="ph-meta">Submitted ' + esc(submittedTxt) + '</div>'
     + '<div class="ph-meta">Photo ' + window.UI.esc(ph.photoIndex) + ' of ' + window.UI.esc(ph.photoCount) + '</div>'
-    + '<div class="ph-badge">' + phStatusBadge(ph.status) + '</div>'
-    + '<div class="ph-view" data-file="' + window.UI.esc(ph.photoRef) + '">&#128247; Tap to load photo</div>';
+    + '<div class="ph-badge">' + statusBadge(ph.status) + '</div>'
+    + '<div class="ph-view" role="button" tabindex="0" data-file="' + esc(ph.photoRef) + '">&#128247; Tap to load photo</div>';
   return card;
 }
-function renderPhotos() {
-  var grid = document.getElementById('phGrid');
-  grid.innerHTML = '';
-  if (!phPhotos.length) { grid.innerHTML = '<div class="empty">No photos in this date range.</div>'; return; }
-  if (phSelected) {
-    // one section → flat grid; listPhotos already returned newest photo first
-    phPhotos.forEach(function (ph) { if (phSectionOf(ph) === phSelected) grid.appendChild(phCard(ph)); });
-    return;
-  }
-  // "All" → grouped under section headings with counts (newest photo first)
-  phSections(phPhotos).forEach(function (sec) {
-    var head = document.createElement('div');
-    head.className = 'ph-sec-head';
-    var n = 0;
-    phPhotos.forEach(function (p) { if (phSectionOf(p) === sec) n++; });
-    head.innerHTML = window.UI.esc(sec) + ' <span class="ph-sec-n">' + n + '</span>';
-    grid.appendChild(head);
-    phPhotos.forEach(function (ph) { if (phSectionOf(ph) === sec) grid.appendChild(phCard(ph)); });
-  });
-}
-document.getElementById('phShow').addEventListener('click', loadPhotos);
-document.querySelectorAll('[data-phq]').forEach(function (b) {
-  b.addEventListener('click', function () { phSetRange(+b.getAttribute('data-phq')); loadPhotos(); });
-});
-document.getElementById('phGrid').addEventListener('click', function (e) {
-  var box = e.target.closest('.ph-view');
-  if (!box || box.getAttribute('data-busy')) return;
+function loadPhotoBox(box) {
+  if (box.getAttribute('data-busy')) return;
   var img = box.querySelector('img');
   if (img) { window.openPhoto(img.src); return; }       // already loaded → enlarge
   box.setAttribute('data-busy', '1');
@@ -367,19 +361,108 @@ document.getElementById('phGrid').addEventListener('click', function (e) {
     box.textContent = (err && err.message) || 'Photo unavailable. Tap to retry.';
     box.removeAttribute('data-busy');
   });
+}
+document.addEventListener('click', function (e) {
+  var box = e.target.closest ? e.target.closest('.ph-view') : null;
+  if (box) loadPhotoBox(box);
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  var box = e.target.closest ? e.target.closest('.ph-view') : null;
+  if (box) { e.preventDefault(); loadPhotoBox(box); }
 });
 window.openPhoto = function (src) {
-  document.getElementById('photoModalImg').src = src;
-  document.getElementById('photoModal').classList.add('open');
+  $('photoModalImg').src = src;
+  $('photoModal').classList.add('open');
 };
-window.closePhotoModal = function () { document.getElementById('photoModal').classList.remove('open'); };
-document.querySelector('[data-tabbtn="photos"]').addEventListener('click', function () {
-  if (!phLoaded) { phSetRange(6); loadPhotos(); }
+window.closePhotoModal = function () { $('photoModal').classList.remove('open'); };
+
+// ── photos tab ────────────────────────────────────────────────
+var phLoaded = false;
+var phPhotos = [];      // last response (newest first)
+var phSelected = '';    // '' = all sections
+var phStaffSel = '';    // '' = all staff
+function phSetRange(daysBack) {
+  var today = window.Dates.today();
+  $('phTo').value = today;
+  $('phFrom').value = window.Dates.addDays(today, -daysBack);
+}
+function phVisible() {
+  return phPhotos.filter(function (p) { return !phStaffSel || nameKey(p.staffName) === nameKey(phStaffSel); });
+}
+function phSections(list) {
+  var counts = {};
+  list.forEach(function (p) { var s = phSectionOf(p); counts[s] = (counts[s] || 0) + 1; });
+  return Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a] || a.localeCompare(b); });
+}
+function loadPhotos() {
+  var info = $('phInfo');
+  info.textContent = 'Loading photos...';
+  $('phChips').innerHTML = '';
+  $('phGrid').innerHTML = '';
+  window.MPS_API.get('getPhotos', { dateFrom: $('phFrom').value, dateTo: $('phTo').value }).then(function (r) {
+    if (!r.ok) { info.textContent = r.error || 'Could not load photos.'; return; }
+    phLoaded = true;
+    phPhotos = r.photos || [];
+    phInfoText = r.total + ' photo' + (r.total === 1 ? '' : 's') + ' from ' + r.dateFrom + ' to ' + r.dateTo
+      + (r.truncated ? ' (showing the newest ' + phPhotos.length + ' — narrow the dates to see the rest)' : '')
+      + '. Tap a photo box to load it.';
+    populatePhStaff();
+    renderPh();
+  });
+}
+var phInfoText = '';
+function populatePhStaff() {
+  var names = {};
+  phPhotos.forEach(function (p) { if (p.staffName) names[p.staffName] = true; });
+  var list = Object.keys(names).sort();
+  if (phStaffSel && list.indexOf(phStaffSel) === -1) phStaffSel = '';
+  $('phStaff').innerHTML = '<option value="">All staff</option>' + list.map(function (n) {
+    return '<option value="' + esc(n) + '"' + (n === phStaffSel ? ' selected' : '') + '>' + esc(n) + '</option>';
+  }).join('');
+}
+function renderPh() {
+  var list = phVisible();
+  var secs = phSections(list);
+  if (phSelected && secs.indexOf(phSelected) === -1) phSelected = '';
+  $('phInfo').textContent = phInfoText + (phStaffSel ? ' Showing ' + list.length + ' by ' + phStaffSel + '.' : '');
+  var html = '<button class="ph-chip' + (phSelected ? '' : ' on') + '" data-phsec="">All (' + list.length + ')</button>';
+  secs.forEach(function (s) {
+    var n = list.filter(function (p) { return phSectionOf(p) === s; }).length;
+    html += '<button class="ph-chip' + (phSelected === s ? ' on' : '') + '" data-phsec="' + esc(s) + '">' + esc(s) + ' (' + n + ')</button>';
+  });
+  $('phChips').innerHTML = html;
+  var grid = $('phGrid');
+  grid.innerHTML = '';
+  if (!list.length) { grid.innerHTML = '<div class="state-msg" style="grid-column:1/-1">No photos for this selection. Try a wider date range or another staff member.</div>'; return; }
+  if (phSelected) {
+    list.forEach(function (ph) { if (phSectionOf(ph) === phSelected) grid.appendChild(phCard(ph)); });
+    return;
+  }
+  secs.forEach(function (sec) {
+    var head = document.createElement('div');
+    head.className = 'ph-sec-head';
+    var items = list.filter(function (p) { return phSectionOf(p) === sec; });
+    head.innerHTML = esc(sec) + ' <span class="ph-sec-n">' + items.length + '</span>';
+    grid.appendChild(head);
+    items.forEach(function (ph) { grid.appendChild(phCard(ph)); });
+  });
+}
+$('phChips').addEventListener('click', function (e) {
+  var chip = e.target.closest('.ph-chip');
+  if (!chip) return;
+  phSelected = chip.getAttribute('data-phsec') || '';
+  renderPh();
+});
+$('phStaff').addEventListener('change', function () { phStaffSel = this.value; renderPh(); });
+$('phShow').addEventListener('click', loadPhotos);
+document.querySelectorAll('[data-phq]').forEach(function (b) {
+  b.addEventListener('click', function () { phSetRange(+b.getAttribute('data-phq')); loadPhotos(); });
 });
 
 // ── load ──────────────────────────────────────────────────────
 function loadAll() {
-  var loadEl = document.getElementById('pg-load');
+  var loadEl = $('pg-load');
   loadEl.style.display = 'flex';
   Promise.all([
     window.MPS_API.get('getTasks', {}),
@@ -388,46 +471,52 @@ function loadAll() {
   ]).then(function (rs) {
     loadEl.style.display = 'none';
     var rt = rs[0], ru = rs[1], rs3 = rs[2];
-    if (!rt.ok) { window.UI.toast(rt.error || 'Failed to load tasks', 'err'); return; }
-    allTasks = rt.tasks || [];
-    renderMapProblems(rt.problems || []);
-    populateSectionFilters();
-    renderTasks();
-    if (ru.ok) { allUsers = ru.users || []; renderUsers(); }
+    if (!rt.ok) { window.UI.toast(rt.error || 'Failed to load tasks', 'err'); }
+    else {
+      allTasks = rt.tasks || [];
+      renderMapProblems(rt.problems || []);
+      populateSectionFilter();
+      renderTasks();
+    }
+    if (ru.ok) { allUsers = ru.users || []; renderStaff(); }
     else window.UI.toast(ru.error || 'Failed to load staff', 'err');
     if (rs3.ok) { settings = rs3.settings || {}; populateSettings(); }
   });
 }
-loadAll();
 
 function renderMapProblems(problems) {
-  var el = document.getElementById('mapProblems');
+  var el = $('mapProblems');
   if (!problems.length) { el.innerHTML = ''; return; }
   el.innerHTML = '<div class="map-problems"><strong>&#9888; ' + problems.length + ' checklist mapping issue(s) found in the Google Sheet:</strong><ul>'
-    + problems.slice(0, 8).map(function (p) { return '<li>Row ' + p.row + ': ' + window.UI.esc(p.issue) + '</li>'; }).join('')
+    + problems.slice(0, 8).map(function (p) { return '<li>Row ' + p.row + ': ' + esc(p.issue) + '</li>'; }).join('')
     + '</ul>' + (problems.length > 8 ? '<div>…and ' + (problems.length - 8) + ' more.</div>' : '')
-    + '<div style="margin-top:6px">Fix these directly in the checklist sheet — they are never silently discarded.</div></div>';
+    + '<div style="margin-top:6px">Fix these in the checklist sheet, then press Refresh.</div></div>';
 }
 
-// ── tasks ─────────────────────────────────────────────────────
-function populateSectionFilters() {
+// ── tasks (read-only) ─────────────────────────────────────────
+var TYPE_LABEL = { yesno: 'Yes / No', photo: 'Photo', rating: 'Rating', text: 'Text' };
+function freqLabel(f) { return f === 'weekly' ? 'Weekly' : (f === 'monthly' ? 'Monthly' : 'Daily'); }
+function freqDetail(f) { return f === 'weekly' ? 'Weekly (Fridays)' : (f === 'monthly' ? 'Monthly (28th)' : 'Every day'); }
+function assignedLabel(t) {
+  return (t.assignedTo && t.assignedTo.length && t.assignedTo[0] !== 'all') ? t.assignedTo.join(', ') : 'Everyone';
+}
+function populateSectionFilter() {
   var secs = [];
   allTasks.forEach(function (t) { if (secs.indexOf(t.section) === -1) secs.push(t.section); });
-  var sf = document.getElementById('secFilter');
-  sf.innerHTML = '<option value="">All sections</option>' + secs.map(function (s) {
-    return '<option value="' + window.UI.esc(s) + '">' + window.UI.esc(s) + '</option>';
+  var cur = $('secFilter').value;
+  $('secFilter').innerHTML = '<option value="">All sections</option>' + secs.map(function (s) {
+    return '<option value="' + esc(s) + '"' + (s === cur ? ' selected' : '') + '>' + esc(s) + '</option>';
   }).join('');
-  var fd = document.getElementById('f-section');
-  fd.innerHTML = '<option value="">— Select —</option>' + secs.map(function (s) {
-    return '<option value="' + window.UI.esc(s) + '">' + window.UI.esc(s) + '</option>';
-  }).join('') + '<option value="__new__">+ New section…</option>';
 }
-
-window.renderTasks = renderTasks;
 function renderTasks() {
-  var q = (document.getElementById('taskSearch').value || '').toLowerCase();
-  var sf = document.getElementById('secFilter').value;
-  var stf = document.getElementById('statusFilter').value;
+  var q = ($('taskSearch').value || '').toLowerCase().trim();
+  var sf = $('secFilter').value;
+  var stf = $('statusFilter').value;
+  var active = allTasks.filter(function (t) { return t.active; }).length;
+  var secCount = {};
+  allTasks.forEach(function (t) { secCount[t.section] = true; });
+  summary($('taskSummary'), [[allTasks.length, 'tasks'], [active, 'active'], [allTasks.length - active, 'inactive'], [Object.keys(secCount).length, 'sections']]);
+
   var filtered = allTasks.filter(function (t) {
     if (sf && t.section !== sf) return false;
     if (stf === 'active' && !t.active) return false;
@@ -435,181 +524,214 @@ function renderTasks() {
     if (q && (t.taskId + ' ' + t.taskName + ' ' + t.section).toLowerCase().indexOf(q) === -1) return false;
     return true;
   });
-  var body = document.getElementById('taskBody');
-  body.innerHTML = '';
-  document.getElementById('taskEmpty').style.display = filtered.length ? 'none' : 'block';
-  filtered.forEach(function (t) {
-    var tr = document.createElement('tr');
-    tr.className = t.active ? '' : 'inactive-row';
-    var flags = (t.mandatory ? '<span class="badge maroon">M</span> ' : '')
-      + (t.photoRequired ? '<span class="badge gold">&#128247;</span>' : '');
-    var freqLabel = t.frequency === 'weekly' ? 'Weekly' : (t.frequency === 'monthly' ? 'Monthly' : 'Daily');
-    var assigned = (t.assignedTo && t.assignedTo.length && t.assignedTo[0] !== 'all')
-      ? window.UI.esc(t.assignedTo.join(', ')) : '<span style="color:var(--ink-60)">Everyone</span>';
-    tr.innerHTML = '<td><span class="tid">' + window.UI.esc(t.taskId) + '</span></td>'
-      + '<td style="white-space:nowrap">' + window.UI.esc(t.section) + '</td>'
-      + '<td style="max-width:280px">' + window.UI.esc(t.taskName) + '</td>'
-      + '<td><span class="badge">' + window.UI.esc(t.type) + '</span></td>'
-      + '<td style="white-space:nowrap">' + freqLabel + '</td>'
-      + '<td style="white-space:nowrap">' + (flags || '—') + '</td>'
-      + '<td style="font-size:11.5px;white-space:nowrap">' + assigned + '</td>'
-      + '<td><button class="active-toggle ' + (t.active ? 'on' : 'off') + '" data-toggle="' + window.UI.esc(t.taskId) + '" title="Toggle active"></button></td>'
-      + '<td style="white-space:nowrap"><button class="btn sm ghost" data-edit-task="' + window.UI.esc(t.taskId) + '">Edit</button> '
-      + '<button class="btn sm ghost" style="color:var(--red)" data-del-task="' + window.UI.esc(t.taskId) + '">Delete</button></td>';
-    body.appendChild(tr);
-  });
-}
-document.getElementById('taskBody').addEventListener('click', function (e) {
-  var tog = e.target.closest('[data-toggle]');
-  if (tog) { toggleTask(tog.getAttribute('data-toggle')); return; }
-  var ed = e.target.closest('[data-edit-task]');
-  if (ed) { openTaskDrawer(ed.getAttribute('data-edit-task')); return; }
-  var del = e.target.closest('[data-del-task]');
-  if (del) { deleteTask(del.getAttribute('data-del-task')); return; }
-});
-
-window.openTaskDrawer = function (taskId) {
-  document.getElementById('editTaskId').value = taskId || '';
-  if (taskId) {
-    var t = allTasks.find(function (x) { return x.taskId === taskId; });
-    if (!t) return;
-    document.getElementById('taskDrawerTitle').textContent = 'Edit Task — ' + taskId;
-    setVal('f-section', t.section);
-    setVal('f-taskName', t.taskName);
-    setVal('f-type', t.type);
-    setVal('f-mandatory', t.mandatory ? 'Yes' : 'No');
-    setVal('f-photo', t.photoRequired ? 'Yes' : 'No');
-    setVal('f-active', t.active ? 'Yes' : 'No');
-    setVal('f-frequency', t.frequency === 'weekly' ? 'Weekly' : (t.frequency === 'monthly' ? 'Monthly' : 'Daily'));
-    setVal('f-assignedTo', (t.assignedTo && t.assignedTo[0] !== 'all') ? t.assignedTo.join(', ') : '');
-  } else {
-    document.getElementById('taskDrawerTitle').textContent = 'Add New Task';
-    ['f-taskName', 'f-newSection'].forEach(function (id) { document.getElementById(id).value = ''; });
-    setVal('f-section', ''); setVal('f-type', 'yesno'); setVal('f-mandatory', 'Yes');
-    setVal('f-photo', 'No'); setVal('f-active', 'Yes'); setVal('f-frequency', 'Daily'); setVal('f-assignedTo', '');
+  var host = $('taskGroups');
+  if (!filtered.length) {
+    host.innerHTML = '<div class="state-msg">' + (allTasks.length ? 'No tasks match these filters.' : 'No tasks found. Add tasks in the Google Sheet (Checklist_Config), then press Refresh.') + '</div>';
+    return;
   }
-  document.getElementById('newSecRow').style.display = 'none';
-  document.getElementById('taskOverlay').classList.add('open');
-  document.getElementById('taskDrawer').classList.add('open');
-};
-window.closeTaskDrawer = function () {
-  document.getElementById('taskOverlay').classList.remove('open');
-  document.getElementById('taskDrawer').classList.remove('open');
-};
-window.checkNewSec = function () {
-  document.getElementById('newSecRow').style.display =
-    document.getElementById('f-section').value === '__new__' ? 'flex' : 'none';
-};
-
-window.saveTask = function () {
-  var taskId = document.getElementById('editTaskId').value;
-  var secVal = document.getElementById('f-section').value;
-  var section = secVal === '__new__' ? document.getElementById('f-newSection').value.trim() : secVal;
-  var taskName = document.getElementById('f-taskName').value.trim();
-  if (!section || !taskName) { window.UI.toast('Section and task name are required.', 'err'); return; }
-  var payload = {
-    section: section, taskName: taskName,
-    type: document.getElementById('f-type').value,
-    mandatory: document.getElementById('f-mandatory').value,
-    photoRequired: document.getElementById('f-photo').value,
-    active: document.getElementById('f-active').value,
-    frequency: document.getElementById('f-frequency').value,
-    assignedTo: document.getElementById('f-assignedTo').value.trim()
-  };
-  payload.action = taskId ? 'updateTask' : 'addTask';
-  if (taskId) payload.taskId = taskId;
-  closeTaskDrawer();
-  window.MPS_API.post(payload.action, payload).then(function (r) {
-    if (r.ok) { window.UI.toast(taskId ? 'Task updated.' : 'Task added.', 'ok'); loadAll(); }
-    else window.UI.toast(r.error || 'Failed to save the task.', 'err');
+  var order = [], groups = {};
+  filtered.forEach(function (t) {
+    if (!groups[t.section]) { groups[t.section] = []; order.push(t.section); }
+    groups[t.section].push(t);
   });
-};
-
-function toggleTask(taskId) {
-  if (!confirm('Toggle the active status of task ' + taskId + '?')) return;
-  window.MPS_API.post('toggleTask', { taskId: taskId }).then(function (r) {
-    if (r.ok) { window.UI.toast('Task ' + (r.active === 'Yes' ? 'activated' : 'deactivated') + '.'); loadAll(); }
-    else window.UI.toast(r.error || 'Failed.', 'err');
-  });
+  var wide = window.matchMedia && window.matchMedia('(min-width: 768px)').matches;
+  var filtering = !!(q || sf || stf);
+  host.innerHTML = order.map(function (sec, i) {
+    var items = groups[sec];
+    var off = items.filter(function (t) { return !t.active; }).length;
+    var open = (wide || filtering || i === 0) ? ' open' : '';
+    return '<details class="tgroup"' + open + '><summary>' + esc(sec)
+      + '<span class="cnt">' + items.length + ' task' + (items.length === 1 ? '' : 's') + (off ? ' · ' + off + ' inactive' : '') + '</span></summary>'
+      + items.map(taskRow).join('') + '</details>';
+  }).join('');
 }
-function deleteTask(taskId) {
-  if (!confirm('Delete task ' + taskId + '?\n\nTasks with submission history cannot be deleted — deactivate them instead.')) return;
-  window.MPS_API.post('deleteTask', { taskId: taskId }).then(function (r) {
-    if (r.ok) { window.UI.toast('Task deleted.', 'ok'); loadAll(); }
-    else window.UI.toast(r.error || 'Cannot delete this task.', 'err');
-  });
+function taskRow(t) {
+  var badges = '<span class="badge">' + freqLabel(t.frequency) + '</span>'
+    + (t.photoRequired ? '<span class="badge gold">Photo</span>' : '')
+    + (t.mandatory ? '<span class="badge maroon">Mandatory</span>' : '')
+    + (t.active ? '' : '<span class="badge red">Inactive</span>');
+  return '<details class="trow' + (t.active ? '' : ' off') + '"><summary><span class="tname">' + esc(t.taskName) + '</span><span class="tbadges">' + badges + '</span></summary>'
+    + '<dl class="tdetail">'
+    + '<div><dt>Task ID</dt><dd class="tid">' + esc(t.taskId) + '</dd></div>'
+    + '<div><dt>Answer type</dt><dd>' + esc(TYPE_LABEL[t.type] || t.type) + '</dd></div>'
+    + '<div><dt>Repeats</dt><dd>' + freqDetail(t.frequency) + '</dd></div>'
+    + '<div><dt>Assigned to</dt><dd>' + esc(assignedLabel(t)) + '</dd></div>'
+    + '<div><dt>Mandatory</dt><dd>' + (t.mandatory ? 'Yes' : 'No') + '</dd></div>'
+    + '<div><dt>Photo required</dt><dd>' + (t.photoRequired ? 'Yes' : 'No') + '</dd></div>'
+    + '</dl></details>';
 }
-
-// ── users ─────────────────────────────────────────────────────
-function renderUsers() {
-  var grid = document.getElementById('userGrid');
-  grid.innerHTML = '';
-  document.getElementById('userEmpty').style.display = allUsers.length ? 'none' : 'block';
-  allUsers.forEach(function (u) {
-    var card = document.createElement('div');
-    card.className = 'user-card';
-    card.innerHTML = '<div class="u-avatar">' + window.UI.esc((u.name || '?').slice(0, 1).toUpperCase()) + '</div>'
-      + '<div class="u-info"><div class="u-name">' + window.UI.esc(u.name) + '</div>'
-      + '<div class="u-meta">' + window.UI.esc(u.role || 'Staff') + ' · '
-      + (u.active ? '<span style="color:var(--green)">&#9679; Active</span>' : '<span style="color:var(--red)">&#9679; Inactive</span>')
-      + (u.pinSet ? '' : ' · <span style="color:var(--amber)">no PIN set</span>') + '</div></div>'
-      + '<div class="u-actions">'
-      + '<button class="btn sm ghost" data-edit-user="' + window.UI.esc(u.name) + '">Edit</button>'
-      + '<button class="btn sm ghost" data-pin-user="' + window.UI.esc(u.name) + '">Reset PIN</button>'
-      + '</div>';
-    grid.appendChild(card);
-  });
-}
-document.getElementById('userGrid').addEventListener('click', function (e) {
-  var ed = e.target.closest('[data-edit-user]');
-  if (ed) { openUserDrawer(ed.getAttribute('data-edit-user'), false); return; }
-  var pin = e.target.closest('[data-pin-user]');
-  if (pin) { openUserDrawer(pin.getAttribute('data-pin-user'), true); return; }
+['taskSearch', 'secFilter', 'statusFilter'].forEach(function (id) {
+  $(id).addEventListener(id === 'taskSearch' ? 'input' : 'change', renderTasks);
 });
+$('taskRefresh').addEventListener('click', loadAll);
 
-window.openUserDrawer = function (userName, pinOnly) {
-  document.getElementById('editUserName').value = userName || '';
-  var u = userName ? allUsers.find(function (x) { return x.name === userName; }) : null;
+// ── staff ─────────────────────────────────────────────────────
+// Stats and history come from getDashboard (one day at a time: its staff and
+// task rows describe the last day of the range) and photos from getPhotos.
+var staffDay = window.Dates.today();
+var staffSel = '';
+var dashCache = {};     // day → dashboard (or null when it failed)
+var dayPhotos = {};     // day → photo list
+var dayLoading = false;
+
+function dashStaffStat(name) {
+  var d = dashCache[staffDay];
+  if (!d || !d.staff) return null;
+  for (var i = 0; i < d.staff.length; i++) if (nameKey(d.staff[i].name) === nameKey(name)) return d.staff[i];
+  return null;
+}
+function ensureStaffDay() {
+  $('sDay').value = staffDay;
+  if (dashCache[staffDay] === undefined) loadStaffDay(staffDay);
+}
+function loadStaffDay(day) {
+  dayLoading = true;
+  renderStaff();
+  var d1 = window.MPS_API.get('getDashboard', { dateFrom: day, dateTo: day });
+  var d2 = window.MPS_API.get('getPhotos', { dateFrom: day, dateTo: day });
+  Promise.all([d1, d2]).then(function (rs) {
+    dayLoading = false;
+    dashCache[day] = rs[0].ok ? (rs[0].dashboard || {}) : null;
+    dayPhotos[day] = rs[1].ok ? (rs[1].photos || []) : [];
+    if (!rs[0].ok) window.UI.toast(rs[0].error || 'Could not load activity for this day.', 'err');
+    if (day === staffDay) renderStaff();
+  });
+}
+function setStaffDay(day) {
+  if (!day) return;
+  var today = window.Dates.today();
+  if (day > today) day = today;
+  staffDay = day;
+  $('sDay').value = day;
+  if (dashCache[day] === undefined) loadStaffDay(day); else renderStaff();
+}
+$('sDay').addEventListener('change', function () { setStaffDay(this.value); });
+$('sdPrev').addEventListener('click', function () { setStaffDay(window.Dates.addDays(staffDay, -1)); });
+$('sdNext').addEventListener('click', function () { setStaffDay(window.Dates.addDays(staffDay, 1)); });
+$('sdToday').addEventListener('click', function () { setStaffDay(window.Dates.today()); });
+$('sDay').value = staffDay;
+
+function renderStaff() {
+  var users = allUsers.slice().sort(function (a, b) {
+    return (b.active ? 1 : 0) - (a.active ? 1 : 0) || String(a.name).localeCompare(String(b.name));
+  });
+  var activeN = users.filter(function (u) { return u.active; }).length;
+  summary($('userSummary'), [[users.length, 'staff'], [activeN, 'active'], [users.length - activeN, 'inactive']]);
+  $('userEmpty').style.display = users.length ? 'none' : 'block';
+  $('userGrid').innerHTML = users.map(function (u) {
+    var st = dashStaffStat(u.name);
+    var stat;
+    if (dayLoading && dashCache[staffDay] === undefined) stat = '<div class="u-stat">…</div>';
+    else if (st) stat = '<div class="u-stat"><b>' + st.submitted + '</b>done' + (st.failed ? ' · ' + st.failed + ' failed' : '') + '</div>';
+    else stat = '<div class="u-stat">No tasks</div>';
+    return '<button class="scard' + (u.active ? '' : ' off') + (nameKey(u.name) === nameKey(staffSel) ? ' sel' : '') + '" data-staff="' + esc(u.name) + '">'
+      + '<div class="u-avatar">' + esc((u.name || '?').slice(0, 1).toUpperCase()) + '</div>'
+      + '<div class="u-info"><div class="u-name">' + esc(u.name) + '</div>'
+      + '<div class="u-meta">' + esc(u.role || 'Staff') + ' · '
+      + (u.active ? '<span class="dot-on">&#9679; Active</span>' : '<span class="dot-off">&#9679; Inactive</span>')
+      + (u.pinSet ? '' : ' · no PIN') + '</div></div>' + stat + '</button>';
+  }).join('');
+  var layout = $('staffLayout');
+  var u = staffSel ? allUsers.filter(function (x) { return nameKey(x.name) === nameKey(staffSel); })[0] : null;
+  if (!u) { staffSel = ''; layout.classList.remove('has-detail'); $('staffDetail').innerHTML = ''; return; }
+  layout.classList.add('has-detail');
+  renderStaffDetail(u);
+}
+function renderStaffDetail(u) {
+  var d = dashCache[staffDay];
+  var st = dashStaffStat(u.name);
+  var rows = [];
+  if (d && d.detail) rows = d.detail.filter(function (r) { return r.state !== 'PENDING' && nameKey(r.staffName) === nameKey(u.name); });
+  var photos = (dayPhotos[staffDay] || []).filter(function (p) { return nameKey(p.staffName) === nameKey(u.name); });
+  var dayTxt = staffDay === window.Dates.today() ? 'today' : staffDay;
+  var h = '<button class="btn sm ghost back" data-sback="1">&#8249; All staff</button>'
+    + '<div class="card card-pad">'
+    + '<div class="d-top"><div class="u-avatar">' + esc((u.name || '?').slice(0, 1).toUpperCase()) + '</div><div>'
+    + '<h3>' + esc(u.name) + '</h3><div class="u-meta">' + esc(u.role || 'Staff') + ' · '
+    + (u.active ? '<span class="dot-on">&#9679; Active</span>' : '<span class="dot-off">&#9679; Inactive</span>')
+    + (u.pinSet ? '' : ' · no PIN set') + '</div></div></div>'
+    + '<div class="summary">'
+    + '<div class="sum-item"><b>' + (st ? st.submitted : 0) + '</b>done ' + esc(dayTxt) + '</div>'
+    + '<div class="sum-item"><b>' + (st ? st.passed : 0) + '</b>passed</div>'
+    + '<div class="sum-item"><b>' + (st ? st.failed : 0) + '</b>failed</div>'
+    + '<div class="sum-item"><b>' + photos.length + '</b>photos</div></div>'
+    + '<div class="d-acts">'
+    + '<button class="btn sm ghost" data-sact="edit">Edit</button>'
+    + '<button class="btn sm ghost" data-sact="pin">Reset PIN</button>'
+    + '<button class="btn sm warn" data-sact="toggle">' + (u.active ? 'Deactivate' : 'Activate') + '</button></div>'
+    + '<div class="d-h">Tasks ' + esc(dayTxt) + '</div>';
+  if (dayLoading && dashCache[staffDay] === undefined) h += '<div class="state-msg">Loading activity...</div>';
+  else if (d === null) h += '<div class="state-msg">Could not load activity for this day. Pick the day again to retry.</div>';
+  else if (!rows.length) h += '<div class="state-msg">No tasks submitted by ' + esc(u.name) + ' on this day.</div>';
+  else h += rows.map(function (r) {
+    var time = r.timestamp ? window.Dates.pretty(r.timestamp) : '';
+    return '<div class="d-task"><div class="t1"><span>' + esc(r.taskName) + '</span>' + statusBadge(r.status) + '</div>'
+      + '<div class="t2">' + esc(r.section) + (time ? ' · ' + esc(time) : '') + (r.remarks ? ' · “' + esc(r.remarks) + '”' : '') + '</div></div>';
+  }).join('');
+  h += '<div class="d-h">Photos ' + esc(dayTxt) + '</div><div class="ph-grid" id="sPhotos"></div></div>';
+  $('staffDetail').innerHTML = h;
+  var grid = $('sPhotos');
+  if (!photos.length) grid.innerHTML = '<div class="state-msg" style="grid-column:1/-1">No photos on this day.</div>';
+  else photos.forEach(function (p) { grid.appendChild(phCard(p)); });
+}
+$('userGrid').addEventListener('click', function (e) {
+  var c = e.target.closest('[data-staff]');
+  if (!c) return;
+  staffSel = c.getAttribute('data-staff');
+  ensureStaffDay();
+  renderStaff();
+  if (window.matchMedia && !window.matchMedia('(min-width: 900px)').matches) window.scrollTo(0, 0);
+});
+$('staffDetail').addEventListener('click', function (e) {
+  if (e.target.closest('[data-sback]')) { staffSel = ''; renderStaff(); return; }
+  var a = e.target.closest('[data-sact]');
+  if (!a) return;
+  var kind = a.getAttribute('data-sact');
+  if (kind === 'edit') openUserDrawer(staffSel, false);
+  else if (kind === 'pin') openUserDrawer(staffSel, true);
+  else if (kind === 'toggle') toggleStaff(staffSel);
+});
+function toggleStaff(name) {
+  var u = allUsers.filter(function (x) { return nameKey(x.name) === nameKey(name); })[0];
   if (!u) return;
-  document.getElementById('userDrawerTitle').textContent = pinOnly ? 'Reset PIN — ' + u.name : 'Edit — ' + u.name;
-  setVal('u-name', u.name);
-  document.getElementById('u-name').disabled = true;
-  document.getElementById('u-pin').value = '';
-  document.getElementById('u-pinLabel').textContent = 'PIN (4 digits)';
-  setRoleSelect(u.role);
-  setVal('u-active', u.active ? 'Yes' : 'No');
-  document.getElementById('userOverlay').classList.add('open');
-  document.getElementById('userDrawer').classList.add('open');
-};
-var _origOpenUser = window.openUserDrawer;
-window.openUserDrawerAdd = function () {
-  document.getElementById('editUserName').value = '';
-  document.getElementById('userDrawerTitle').textContent = 'Add Staff';
-  var n = document.getElementById('u-name');
-  n.disabled = false; n.value = '';
-  document.getElementById('u-pin').value = '';
-  document.getElementById('u-pinLabel').textContent = 'PIN (4 digits)';
-  setVal('u-role', 'Staff'); setVal('u-active', 'Yes');
-  document.getElementById('userOverlay').classList.add('open');
-  document.getElementById('userDrawer').classList.add('open');
-};
-// the "+ Add Staff" button calls openUserDrawer() with no args
+  var msg = u.active
+    ? 'Deactivate ' + u.name + '?\n\nThey will not be able to log in until you activate them again.'
+    : 'Activate ' + u.name + '?\n\nThey will be able to log in again.';
+  if (!confirm(msg)) return;
+  window.MPS_API.post('updateUser', { name: u.name, active: u.active ? 'No' : 'Yes' }).then(function (r) {
+    if (r.ok) { window.UI.toast(u.active ? 'Staff member deactivated.' : 'Staff member activated.', 'ok'); loadAll(); }
+    else window.UI.toast(r.error || 'Could not change the status.', 'err');
+  });
+}
+
+// add / edit / reset PIN drawer
 window.openUserDrawer = function (userName, pinOnly) {
-  if (!userName) return window.openUserDrawerAdd();
-  return _origOpenUser(userName, pinOnly);
+  var u = userName ? allUsers.filter(function (x) { return x.name === userName; })[0] : null;
+  var isAdd = !u;
+  $('editUserName').value = isAdd ? '' : u.name;
+  $('userDrawerTitle').textContent = isAdd ? 'Add staff' : (pinOnly ? 'Reset PIN — ' + u.name : 'Edit — ' + u.name);
+  var n = $('u-name');
+  n.disabled = !isAdd;
+  n.value = isAdd ? '' : u.name;
+  $('u-pin').value = '';
+  $('u-pinLabel').textContent = 'PIN (4 digits)';
+  $('u-pinHint').textContent = isAdd ? 'PINs are stored securely and never shown.' : 'Leave empty to keep the current PIN.';
+  if (isAdd) { setVal('u-role', 'Staff'); setVal('u-active', 'Yes'); }
+  else { setRoleSelect(u.role); setVal('u-active', u.active ? 'Yes' : 'No'); }
+  $('userOverlay').classList.add('open');
+  $('userDrawer').classList.add('open');
+  setTimeout(function () { (pinOnly ? $('u-pin') : (isAdd ? n : $('u-role'))).focus(); }, 60);
 };
-
 window.closeUserDrawer = function () {
-  document.getElementById('userOverlay').classList.remove('open');
-  document.getElementById('userDrawer').classList.remove('open');
+  $('userOverlay').classList.remove('open');
+  $('userDrawer').classList.remove('open');
 };
-
 window.saveUser = function () {
-  var isEdit = !!document.getElementById('editUserName').value;
-  var name = document.getElementById('u-name').value.trim();
-  var pin = document.getElementById('u-pin').value.trim();
-  var role = document.getElementById('u-role').value;
-  var active = document.getElementById('u-active').value;
+  var isEdit = !!$('editUserName').value;
+  var name = $('u-name').value.trim();
+  var pin = $('u-pin').value.trim();
+  var role = $('u-role').value;
+  var active = $('u-active').value;
   if (!isEdit && !name) { window.UI.toast('Name is required.', 'err'); return; }
   if (isEdit && pin && !/^\d{4}$/.test(pin)) { window.UI.toast('PIN must be 4 digits.', 'err'); return; }
   if (!isEdit && !/^\d{4}$/.test(pin)) { window.UI.toast('PIN must be 4 digits.', 'err'); return; }
@@ -631,23 +753,18 @@ window.saveUser = function () {
 
 // ── settings ──────────────────────────────────────────────────
 function populateSettings() {
-  var map = {
-    Store_Name: 's-storeName',
-    Store_Location: 's-storeLocation',
-    Opening_Time: 's-openingTime',
-    Closing_Time: 's-closingTime'
-  };
+  var map = { Store_Name: 's-storeName', Store_Location: 's-storeLocation', Opening_Time: 's-openingTime', Closing_Time: 's-closingTime' };
   Object.keys(map).forEach(function (k) {
-    var el = document.getElementById(map[k]);
+    var el = $(map[k]);
     if (el && settings[k]) el.value = String(settings[k]).slice(0, 8);
   });
 }
 window.saveSettings = function () {
   var s = {
-    Store_Name: document.getElementById('s-storeName').value.trim(),
-    Store_Location: document.getElementById('s-storeLocation').value.trim(),
-    Opening_Time: document.getElementById('s-openingTime').value,
-    Closing_Time: document.getElementById('s-closingTime').value
+    Store_Name: $('s-storeName').value.trim(),
+    Store_Location: $('s-storeLocation').value.trim(),
+    Opening_Time: $('s-openingTime').value,
+    Closing_Time: $('s-closingTime').value
   };
   window.MPS_API.post('updateSettings', { settings: s }).then(function (r) {
     if (r.ok) window.UI.toast('Settings saved.', 'ok');
@@ -661,7 +778,7 @@ window.saveSettings = function () {
 // Only "Admin" opens the Dashboard / Admin page; every other role is a
 // normal checklist user.
 function setRoleSelect(role) {
-  var el = document.getElementById('u-role');
+  var el = $('u-role');
   var r = String(role || '').trim() || 'Staff';
   for (var i = 0; i < el.options.length; i++) {
     if (el.options[i].value.toLowerCase() === r.toLowerCase()) { el.selectedIndex = i; return; }
@@ -671,9 +788,8 @@ function setRoleSelect(role) {
   el.appendChild(opt);
   el.value = r;
 }
-
 function setVal(id, val) {
-  var el = document.getElementById(id);
+  var el = $(id);
   if (!el) return;
   if (el.tagName === 'SELECT') {
     for (var i = 0; i < el.options.length; i++) {
@@ -682,6 +798,9 @@ function setVal(id, val) {
     el.selectedIndex = 0;
   } else el.value = val;
 }
+
+showTab(tabFromHash(), true);
+loadAll();
 
 })();
 </script>
