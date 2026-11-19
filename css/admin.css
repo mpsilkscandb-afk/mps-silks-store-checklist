@@ -1,0 +1,357 @@
+/* ════════════════════════════════════════════════════════════════
+   MPS Silks — Admin Panel layout (linked only by admin.html)
+
+   Desktop-first: a ~220px left sidebar (≥900px) that collapses into
+   a top tab bar on phones. One page template for every panel:
+   header (title + count subtitle) → toolbar/filter bar → content.
+
+   Every colour, radius, shadow and font comes from the tokens in
+   css/theme.css — nothing new is hard-coded here except layout
+   measurements. Loaded AFTER theme.css, so these rules win ties.
+   ════════════════════════════════════════════════════════════════ */
+
+/* JS keeps this in sync with the sticky phone header so the Photos
+   filter bar parks just below it instead of underneath it. */
+:root { --adm-sticky-top: 0px; }
+
+/* ── shell / sidebar ─────────────────────────────────────────── */
+.adm-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.adm-side {
+  position: sticky; top: 0; align-self: start; height: 100vh;
+  overflow-y: auto;
+  background: var(--paper);
+  border-right: 2px solid var(--gold);
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 16px 12px;
+  z-index: 100;
+}
+
+.adm-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.adm-brand-txt { min-width: 0; }
+.adm-brand-title {
+  font-family: var(--font-head); color: var(--maroon);
+  font-size: 16px; line-height: 1.15;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* theme .tb-sub is gold for the dark topbar; on the light sidebar it
+   must read as muted ink instead. */
+.adm-side .tb-sub { color: var(--ink-60); }
+
+.adm-nav { display: flex; flex-direction: column; gap: 4px; }
+.adm-nav-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  min-height: 44px; padding: 10px 12px;
+  border-radius: var(--r-sm); border: 1.5px solid transparent;
+  font-size: 13px; font-weight: 700; text-align: left;
+  text-decoration: none; color: var(--ink-60); background: transparent;
+  transition: background .12s, color .12s;
+}
+.adm-nav-btn:hover { background: var(--ivory); color: var(--maroon); }
+.adm-nav-btn.active { background: var(--maroon-l); color: var(--maroon); border-color: var(--maroon); }
+.adm-nav-btn .ico { width: 16px; flex-shrink: 0; text-align: center; }
+
+.adm-div { border: 0; border-top: 1.5px solid var(--border); margin: auto 0 0; }
+.adm-side-foot { display: flex; flex-direction: column; gap: 4px; }
+
+.adm-main { min-width: 0; padding: 20px 20px 48px; }
+.adm-wrap { max-width: 1200px; margin: 0 auto; }
+
+/* ── page template (every panel) ─────────────────────────────── */
+.panel { display: none; }
+.panel.active { display: block; }
+
+.panel-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.panel-head h2 {
+  font-family: var(--font-head); font-size: 21px; color: var(--maroon);
+  line-height: 1.2;
+}
+.panel-sub { font-size: 12.5px; color: var(--ink-60); margin-top: 3px; }
+.panel-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.hint-line { font-size: 11.5px; color: var(--ink-60); margin-bottom: 10px; }
+.muted { color: var(--ink-60); }
+
+/* ── toolbar / filters ───────────────────────────────────────── */
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.search-inp {
+  flex: 1; min-width: 170px; padding: 9px 12px;
+  border-radius: var(--r-sm); border: 1.5px solid var(--border-strong);
+  font-size: 13px; background: var(--paper);
+}
+.filter-sel {
+  padding: 9px 10px; border-radius: var(--r-sm);
+  border: 1.5px solid var(--border-strong);
+  font-size: 12.5px; background: var(--paper);
+}
+.search-inp:focus, .filter-sel:focus { border-color: var(--gold); }
+
+/* ── mapping-problems banner (collapsible) ───────────────────── */
+.map-details { margin-bottom: 12px; }
+.map-details[hidden] { display: none; }
+.map-details > summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 8px; min-height: 44px;
+  background: var(--amber-l); border: 1.5px solid var(--amber);
+  border-radius: var(--r-sm); padding: 10px 12px;
+  font-size: 12px; font-weight: 700; color: var(--amber);
+}
+.map-details > summary::-webkit-details-marker { display: none; }
+.map-details > summary::before {
+  content: '\25BE'; font-size: 10px; transition: transform .15s;
+}
+.map-details:not([open]) > summary::before { transform: rotate(-90deg); }
+.map-problems {
+  background: var(--amber-l); border: 1.5px solid var(--amber); border-top: 0;
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  padding: 10px 12px; font-size: 12px; color: var(--amber);
+}
+.map-problems ul { margin: 6px 0 0 18px; }
+.map-problems li { margin-top: 3px; }
+.map-fix { margin-top: 6px; }
+
+/* ── tables (scroll region + sticky header) ──────────────────── */
+.adm-table-scroll { max-height: 66vh; overflow: auto; }
+.adm-table-scroll table.data { border-collapse: separate; border-spacing: 0; }
+.adm-table-scroll thead th {
+  position: sticky; top: 0; z-index: 3;
+  border-bottom: 2px solid var(--gold);
+}
+.th-sub {
+  display: block; margin-top: 2px;
+  font-size: 9.5px; font-weight: 500; letter-spacing: .03em;
+  text-transform: none; opacity: .75;
+}
+.num { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ── tasks table ─────────────────────────────────────────────── */
+table.data.gtable { min-width: 860px; }
+/* `table.data th` (theme.css) is more specific than a bare `.grp-row th`,
+   so qualify it or the group row inherits the dark maroon header fill and
+   the maroon button text disappears into it. */
+table.data .grp-row th {
+  background: var(--paper); color: var(--maroon);
+  font-family: var(--font-head); font-size: 14.5px; font-weight: 600;
+  letter-spacing: normal; text-align: left;
+  white-space: normal; padding: 0;
+  border-bottom: 1.5px solid var(--border);
+}
+.grp-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 9px 12px; min-height: 40px;
+  background: transparent; color: var(--maroon);
+  font-family: var(--font-head); font-size: 14.5px; font-weight: 600;
+  text-align: left;
+}
+.grp-btn:hover { background: var(--gold-pale); }
+.grp-btn .caret { font-size: 9px; color: var(--gold-dark); transition: transform .15s; }
+.grp-btn[aria-expanded='false'] .caret { transform: rotate(-90deg); }
+.grp-btn .cnt {
+  font-family: var(--font-body); font-size: 10.5px; font-weight: 700;
+  background: var(--ink-10); color: var(--ink-60);
+  border-radius: 10px; padding: 1px 8px;
+}
+tbody.collapsed tr:not(.grp-row) { display: none; }
+
+.t-name { font-weight: 700; max-width: 300px; }
+.tid {
+  font-size: 10.5px; font-weight: 700; color: var(--ink-60);
+  font-family: monospace; margin-top: 2px;
+}
+.inactive-row td { opacity: .45; }
+.flags { display: inline-flex; gap: 4px; margin-left: 4px; vertical-align: middle; }
+.ctrls { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+.active-toggle {
+  width: 38px; height: 21px; border-radius: 11px; border: 0;
+  cursor: pointer; position: relative; transition: background .2s;
+  flex-shrink: 0; padding: 0;
+}
+.active-toggle.on { background: var(--green); }
+.active-toggle.off { background: var(--ink-30); }
+.active-toggle::after {
+  content: ''; position: absolute; top: 2.5px; width: 16px; height: 16px;
+  border-radius: 50%; background: #fff; transition: left .2s;
+}
+.active-toggle.on::after { left: 19px; }
+.active-toggle.off::after { left: 3px; }
+
+.menu-btn {
+  width: 32px; height: 32px; border-radius: var(--r-sm);
+  background: var(--paper); border: 1.5px solid var(--border-strong);
+  color: var(--ink-60); font-weight: 700; line-height: 1;
+}
+.menu-btn:hover { background: var(--ivory); color: var(--maroon); }
+
+/* the "⋯" popover is fixed-positioned so it is never clipped by the
+   table's scroll region */
+#rowMenu {
+  position: fixed; z-index: 250; min-width: 140px;
+  background: var(--paper); border: 1.5px solid var(--border-strong);
+  border-radius: var(--r-sm); box-shadow: var(--shadow); padding: 4px;
+}
+#rowMenu[hidden] { display: none; }
+#rowMenu button {
+  display: block; width: 100%; text-align: left;
+  padding: 10px 12px; min-height: 40px;
+  font-size: 12.5px; font-weight: 700;
+  color: var(--red); background: transparent; border-radius: 6px;
+}
+#rowMenu button:hover { background: var(--red-l); }
+
+/* ── staff table ─────────────────────────────────────────────── */
+table.data.staff-table { min-width: 840px; }
+.st-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.u-avatar {
+  width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
+  background: var(--maroon); color: #FFF8E7;
+  border: 1.5px solid var(--gold-dark);
+  font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ── photos ──────────────────────────────────────────────────── */
+.ph-bar {
+  position: sticky; top: var(--adm-sticky-top, 0px); z-index: 60;
+  background: var(--cream);
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding: 10px 0; margin-bottom: 4px;
+  border-bottom: 1.5px solid var(--border);
+}
+.ph-bar label {
+  font-size: 12px; font-weight: 700; color: var(--ink-60);
+  display: flex; align-items: center; gap: 6px;
+}
+.ph-bar input[type='date'] {
+  padding: 8px; min-height: 38px;
+  border: 1.5px solid var(--border-strong); border-radius: var(--r-sm);
+  background: var(--paper); font-size: 13px;
+}
+.seg {
+  display: inline-flex; overflow: hidden;
+  background: var(--paper); border: 1.5px solid var(--border-strong);
+  border-radius: var(--r-sm);
+}
+.seg button {
+  padding: 8px 12px; min-height: 38px;
+  font-size: 12px; font-weight: 700; color: var(--ink-60);
+  background: transparent; border-right: 1.5px solid var(--border-strong);
+}
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: var(--maroon); color: #FFF8E7; }
+
+.ph-chips { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 12px; }
+.ph-chip {
+  padding: 7px 13px; border-radius: 16px;
+  font-size: 11.5px; font-weight: 700;
+  background: var(--paper); color: var(--ink-60);
+  border: 1.5px solid var(--border-strong);
+  min-height: 34px;
+  transition: background .12s;
+}
+.ph-chip.on { background: var(--maroon-l); color: var(--maroon); border-color: var(--maroon); }
+
+.ph-loadrow { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.ph-loadrow .btn[hidden] { display: none; }
+
+.ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.ph-sec-head {
+  grid-column: 1 / -1;
+  font-family: var(--font-head); font-size: 15.5px; color: var(--maroon);
+  margin-top: 8px; padding-bottom: 5px;
+  border-bottom: 1.5px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.ph-sec-n {
+  font-family: var(--font-body); font-size: 10.5px; font-weight: 700;
+  background: var(--ink-10); color: var(--ink-60);
+  border-radius: 10px; padding: 1px 8px;
+}
+.ph-card { background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--r); padding: 10px; }
+.ph-card .ph-task { font-size: 13px; font-weight: 700; }
+.ph-card .ph-meta { font-size: 11px; color: var(--ink-60); margin-top: 3px; }
+.ph-card .ph-date { font-size: 11px; color: var(--ink-60); margin-top: 3px; }
+.ph-card .ph-badge { margin: 6px 0 8px; }
+.ph-card .ph-view {
+  width: 100%; min-height: 90px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ivory); border-radius: var(--r-sm);
+  font-size: 12px; font-weight: 700; color: var(--maroon);
+  cursor: pointer; text-align: center; padding: 6px;
+}
+.ph-card .ph-view img { width: 100%; border-radius: var(--r-sm); display: block; }
+
+/* ── settings ────────────────────────────────────────────────── */
+.setting-card {
+  background: var(--paper); border: 1.5px solid var(--border);
+  border-radius: var(--r); padding: 16px;
+  box-shadow: var(--shadow); max-width: 560px;
+}
+.setting-card h3 { font-size: 13.5px; font-weight: 700; color: var(--maroon); margin-bottom: 12px; }
+#btnSaveSettings { min-width: 150px; }
+
+/* ── drawers ─────────────────────────────────────────────────── */
+.field-lbl { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pin-toggle {
+  font-size: 11px; font-weight: 700; color: var(--maroon);
+  background: transparent; text-decoration: underline;
+  min-height: 28px; padding: 0 2px;
+}
+
+/* ── focus visibility ────────────────────────────────────────── */
+button:focus-visible, a:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--gold-dark); outline-offset: 2px;
+}
+.field input:focus-visible, .field select:focus-visible,
+.search-inp:focus-visible, .filter-sel:focus-visible,
+.ph-bar input:focus-visible {
+  outline: none; border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold-pale);
+}
+
+/* ── phones: sidebar collapses into a top tab bar (<900px) ──── */
+@media (max-width: 899px) {
+  .adm-shell { display: block; }
+
+  /* The whole header block sticks: identity row on top, tabs under it
+     (the same shape as the old topbar + tabs). */
+  .adm-side {
+    position: sticky; top: 0; height: auto; align-self: auto;
+    overflow: visible;
+    flex-direction: row; flex-wrap: wrap; align-items: center;
+    gap: 6px 10px;
+    padding: 8px 12px 0;
+    border-right: 0; border-bottom: 3px solid var(--gold);
+  }
+  .adm-brand { order: 1; flex: 1 1 auto; }
+  .adm-brand .tb-logo-chip { width: 36px; height: 36px; }
+  .adm-brand-title { font-size: 14px; }
+  .adm-side-foot { order: 2; flex: 0 0 auto; flex-direction: row; gap: 6px; }
+  .adm-side-foot .adm-nav-btn { min-height: 38px; padding: 6px 10px; font-size: 11.5px; }
+  .adm-nav {
+    order: 3; flex: 1 0 100%;
+    flex-direction: row; gap: 4px;
+    margin: 0 -12px; padding: 4px 8px 6px;
+    background: var(--paper);
+    border-top: 1.5px solid var(--border);
+  }
+  .adm-nav .adm-nav-btn {
+    flex: 1; justify-content: center; text-align: center;
+    padding: 10px 4px; font-size: 12px; gap: 4px;
+  }
+  .adm-nav .adm-nav-btn .ico { width: auto; }
+  .adm-div { display: none; }
+
+  .adm-main { padding: 14px 12px 40px; }
+  .panel-head h2 { font-size: 19px; }
+
+  /* tables keep their horizontal scroll inside the page — nothing
+     may widen the viewport */
+  .adm-table-scroll { max-height: 60vh; }
+}
