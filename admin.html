@@ -60,13 +60,18 @@
           </div>
         </div>
 
-        <div id="ovWeek" class="ov-week" aria-label="Last 7 days"></div>
         <div id="ovHero"></div>
+        <div class="ov-row">
+          <div id="ovWeek" class="ov-card ov-weekcard" aria-label="Last 7 days"></div>
+          <div id="ovSecs" class="ov-card ov-seccard"></div>
+        </div>
+        <div id="ovAttn"></div>
 
         <div class="ov-ctl">
           <div class="seg" role="group" aria-label="Group by">
             <button type="button" class="on" data-ovview="person">By person</button>
             <button type="button" data-ovview="task">By task</button>
+            <button type="button" data-ovview="photos">Photos</button>
           </div>
           <input class="search-inp" id="ovSearch" type="search" placeholder="Search a person or task..." aria-label="Search people or tasks"/>
           <select class="filter-sel" id="ovRole" aria-label="Filter by role"><option value="">All roles</option></select>
@@ -1056,18 +1061,19 @@ document.getElementById('u-pinToggle').addEventListener('click', function () {
 // single-day call per other day picked. Who a task belongs to is
 // worked out the same way the backend does it (tasksForUser):
 // "all" / empty = everyone, otherwise a staff name or a role.
-var ov = { date: '', cache: {}, week: null, view: 'person', status: '', q: '', role: '', seq: 0, err: '', open: {} };
+var ov = { date: '', cache: {}, week: null, view: 'person', status: '', q: '', role: '', seq: 0, err: '', open: {}, img: {} };
 
 function ovEl(id) { return document.getElementById(id); }
 function ovKey(r) { return r.state === 'PASS' ? 'done' : (r.state === 'FAIL' ? 'failed' : 'open'); }
 function ovOpenLabel(d) { return (d && d.outstandingLabel) || 'Pending'; }
+function ovE(s) { return window.UI.esc(s); }
 
 function ovChip(r, d) {
   var k = ovKey(r);
   if (k === 'done') return '<span class="st st-done">Done</span>';
   if (k === 'failed') return '<span class="st st-failed">Failed</span>';
   var lbl = ovOpenLabel(d);
-  return '<span class="st ' + (lbl === 'Missed' ? 'st-missed' : 'st-open') + '">' + window.UI.esc(lbl) + '</span>';
+  return '<span class="st ' + (lbl === 'Missed' ? 'st-missed' : 'st-open') + '">' + ovE(lbl) + '</span>';
 }
 
 function ovWhen(r) {
@@ -1090,6 +1096,30 @@ function ovAssign(r) {
         || list.indexOf(String(u.role || 'Staff').toLowerCase()) !== -1;
     })
   };
+}
+
+function ovAvClass(name) {
+  var h = 0, s = String(name || '');
+  for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 6;
+  return 'av' + h;
+}
+
+// SVG ring: parts = [[count, cssClass], ...] out of total
+function ovRing(parts, total, size, stroke, centre) {
+  var r = (size - stroke) / 2, C = 2 * Math.PI * r, off = 0;
+  var segs = '';
+  if (total > 0) {
+    parts.forEach(function (p) {
+      if (!p[0]) return;
+      var len = p[0] / total * C;
+      segs += '<circle class="rg ' + p[1] + '" cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" stroke-width="' + stroke
+        + '" stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) + '" stroke-dashoffset="' + (-off).toFixed(2) + '"/>';
+      off += len;
+    });
+  }
+  return '<svg class="ring" viewBox="0 0 ' + size + ' ' + size + '" width="' + size + '" height="' + size + '" aria-hidden="true">'
+    + '<circle class="rg rg-track" cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" stroke-width="' + stroke + '"/>'
+    + segs + '</svg><span class="ring-c">' + centre + '</span>';
 }
 
 function ovInit() {
@@ -1140,7 +1170,7 @@ function ovRoleOptions() {
   var sel = ovEl('ovRole');
   var keep = ov.role;
   sel.innerHTML = '<option value="">All roles</option>' + roles.map(function (r) {
-    return '<option value="' + window.UI.esc(r) + '">' + window.UI.esc(r) + '</option>';
+    return '<option value="' + ovE(r) + '">' + ovE(r) + '</option>';
   }).join('');
   if (keep && roles.indexOf(keep) !== -1) sel.value = keep; else { ov.role = ''; sel.value = ''; }
 }
@@ -1156,7 +1186,7 @@ function ovRender() {
   ovEl('ovToday').disabled = isToday;
   ovEl('ovTitle').textContent = isToday ? 'Today' : window.Dates.dayOfWeek(ov.date);
   ovEl('ovSub').textContent = window.Dates.formatFull(ov.date)
-    + (isToday ? '' : '. Tasks nobody submitted on a past day show as Missed.');
+    + (isToday ? '' : ' \u00b7 tasks nobody submitted show as Missed');
   document.querySelectorAll('[data-ovview]').forEach(function (b) {
     b.classList.toggle('on', b.getAttribute('data-ovview') === ov.view);
   });
@@ -1167,56 +1197,111 @@ function ovRender() {
   var hero = ovEl('ovHero'), body = ovEl('ovBody');
   if (!d) {
     hero.innerHTML = '';
+    ovEl('ovSecs').innerHTML = '';
+    ovEl('ovAttn').innerHTML = '';
     body.innerHTML = ov.err
-      ? '<div class="empty">' + window.UI.esc(ov.err) + '<br/><button type="button" class="btn sm" id="ovRetry" style="margin-top:10px">Try again</button></div>'
+      ? '<div class="empty">' + ovE(ov.err) + '<br/><button type="button" class="btn sm" id="ovRetry" style="margin-top:10px">Try again</button></div>'
       : '<div class="loading-block"><div class="spinner"></div><div class="lbl">Loading this day...</div></div>';
     return;
   }
   var rows = d.detail || [];
   rows.forEach(function (r) { r._as = ovAssign(r); });
   hero.innerHTML = ovHero(d);
+  ovEl('ovSecs').innerHTML = ovSecCard(d);
+  ovEl('ovAttn').innerHTML = ovAttn(d, rows);
   body.innerHTML = !rows.length
     ? '<div class="empty">No tasks are due on this day.</div>'
-    : (ov.view === 'person' ? ovPersonView(d, rows) : ovTaskView(d));
+    : (ov.view === 'person' ? ovPersonView(d, rows) : (ov.view === 'photos' ? ovPhotoView(d, rows) : ovTaskView(d)));
+  ovHydrate();
 }
 
+// ── 7-day chart ──────────────────────────────────────────────
 function ovRenderWeek() {
   var el = ovEl('ovWeek');
   if (!ov.week || !ov.week.length) { el.innerHTML = ''; return; }
   var today = window.Dates.today();
-  el.innerHTML = ov.week.map(function (t) {
-    var short = window.Dates.formatShort(t.date).split(' ');
-    var label = t.date === today ? 'Today' : short[0] + ' ' + short[1];
-    var note;
-    if (!t.assigned) note = '<span class="wk-n quiet">No tasks</span>';
-    else if (!t.pending) note = '<span class="wk-n ok">Complete</span>';
-    else if (t.date < today) note = '<span class="wk-n bad">' + t.pending + ' missed</span>';
-    else note = '<span class="wk-n wait">' + t.pending + ' pending</span>';
-    return '<button type="button" class="wk' + (t.date === ov.date ? ' on' : '') + '" data-ovday="' + window.UI.esc(t.date) + '">'
-      + '<span class="wk-d">' + window.UI.esc(label) + '</span>'
-      + '<span class="wk-p">' + (t.assigned ? t.pct + '%' : '-') + '</span>'
-      + '<span class="wk-bar"><i style="width:' + (t.assigned ? t.pct : 0) + '%"></i></span>'
-      + note + '</button>';
-  }).join('');
+  el.innerHTML = '<div class="ov-ct">Last 7 days <span>tap a day to open it</span></div><div class="wk-cols">'
+    + ov.week.map(function (t) {
+      var short = window.Dates.formatShort(t.date).split(' ');
+      var label = t.date === today ? 'Today' : short[0];
+      var sub = t.date === today ? short[0] + ' ' + short[1] : short[1];
+      var pct = t.assigned ? t.pct : 0;
+      var cls = !t.assigned ? 'none' : (!t.pending ? 'ok' : (t.date < today ? 'bad' : 'wait'));
+      var note;
+      if (!t.assigned) note = 'No tasks';
+      else if (!t.pending) note = 'Complete';
+      else note = t.pending + (t.date < today ? ' missed' : ' pending');
+      return '<button type="button" class="wk wk-' + cls + (t.date === ov.date ? ' on' : '') + '" data-ovday="' + ovE(t.date) + '">'
+        + '<span class="wk-p">' + (t.assigned ? pct + '%' : '\u2013') + '</span>'
+        + '<span class="wk-track"><i style="height:' + Math.max(pct, t.assigned ? 4 : 0) + '%"></i></span>'
+        + '<span class="wk-d">' + ovE(label) + '</span>'
+        + '<span class="wk-s">' + ovE(sub) + '</span>'
+        + '<span class="wk-n">' + ovE(note) + '</span></button>';
+    }).join('') + '</div>';
 }
 
+// ── hero: ring + headline tiles ──────────────────────────────
 function ovHero(d) {
   var h = d.headline || {};
   var a = h.assigned || 0;
   if (!a) return '';
   var done = h.passed || 0, fail = h.failed || 0, open = h.pending || 0;
-  var lbl = ovOpenLabel(d);
-  function seg(n, cls) { return n ? '<span class="' + cls + '" style="width:' + (n / a * 100) + '%"></span>' : ''; }
-  function flt(key, label, n, dot) {
-    return '<button type="button" class="flt' + (ov.status === key ? ' on' : '') + '" data-ovst="' + key + '">'
-      + '<i class="dot ' + dot + '"></i>' + window.UI.esc(label) + ' <b>' + n + '</b></button>';
+  var lbl = ovOpenLabel(d), missed = lbl === 'Missed';
+  var staff = allUsers.filter(function (u) { return u.active; }).length;
+  var verdict, hint;
+  if (!open && !fail) { verdict = 'Everything is done'; hint = 'All ' + a + ' tasks were submitted and passed.'; }
+  else {
+    var bits = [];
+    if (fail) bits.push(fail + ' failed');
+    if (open) bits.push(open + ' ' + lbl.toLowerCase());
+    verdict = missed ? 'Some tasks were not done' : 'Work still in progress';
+    hint = bits.join(' \u00b7 ') + ' out of ' + a + ' tasks';
+  }
+  function tile(key, label, n, cls) {
+    return '<button type="button" class="kpi ' + cls + (ov.status === key ? ' on' : '') + '" data-ovst="' + key + '">'
+      + '<span class="kpi-n">' + n + '</span><span class="kpi-l">' + ovE(label) + '</span></button>';
   }
   return '<div class="ov-hero">'
-    + '<div class="ov-pct"><span class="ov-big">' + (h.pct || 0) + '%</span>'
-    + '<span class="ov-cap">of ' + a + ' task' + (a === 1 ? '' : 's') + ' submitted</span></div>'
-    + '<div class="meter lg' + (lbl === 'Missed' ? ' past' : '') + '">' + seg(done, 'm-d') + seg(fail, 'm-f') + '</div>'
-    + '<div class="flts">' + flt('', 'All', a, 'd-all') + flt('done', 'Done', done, 'd-done')
-    + flt('failed', 'Failed', fail, 'd-failed') + flt('open', lbl, open, lbl === 'Missed' ? 'd-missed' : 'd-open') + '</div>'
+    + '<div class="ov-ring">' + ovRing([[done, 'rg-d'], [fail, 'rg-f'], [open, missed ? 'rg-m' : 'rg-o']], a, 132, 13,
+      '<b>' + (h.pct || 0) + '<small>%</small></b><em>submitted</em>') + '</div>'
+    + '<div class="ov-hero-txt"><div class="ov-eyebrow">' + ovE(ov.date === window.Dates.today() ? 'Today\u2019s checklist' : 'Checklist for ' + window.Dates.dayOfWeek(ov.date)) + '</div>'
+    + '<div class="ov-verdict">' + ovE(verdict) + '</div><div class="ov-hint">' + ovE(hint) + '</div>'
+    + '<div class="ov-staff">' + staff + ' active staff</div></div>'
+    + '<div class="ov-kpis">' + tile('', 'All tasks', a, 'k-all') + tile('done', 'Done', done, 'k-done')
+    + tile('failed', 'Failed', fail, 'k-failed') + tile('open', lbl, open, missed ? 'k-missed' : 'k-open') + '</div>'
+    + '</div>';
+}
+
+// ── section progress ─────────────────────────────────────────
+function ovSecCard(d) {
+  var secs = (d.sections || []).filter(function (s) { return (s.tasks || []).length; });
+  if (!secs.length) return '';
+  var missed = ovOpenLabel(d) === 'Missed';
+  return '<div class="ov-ct">Progress by section</div>' + secs.map(function (s) {
+    var c = { done: 0, failed: 0, open: 0 };
+    (s.tasks || []).forEach(function (r) { c[ovKey(r)]++; });
+    var t = (s.tasks || []).length;
+    var pct = Math.round((c.done + c.failed) / t * 100);
+    return '<div class="sb"><div class="sb-top"><span class="sb-n">' + ovE(s.section) + '</span>'
+      + '<span class="sb-v">' + (c.done + c.failed) + '/' + t + '</span></div>'
+      + '<div class="bar"><i class="b-d" style="width:' + (c.done / t * 100) + '%"></i><i class="b-f" style="width:' + (c.failed / t * 100) + '%"></i></div>'
+      + (pct === 100 && !c.failed ? '' : '') + '</div>';
+  }).join('');
+}
+
+// ── needs attention ──────────────────────────────────────────
+function ovAttn(d, rows) {
+  var bad = rows.filter(function (r) { return ovKey(r) !== 'done'; });
+  if (!bad.length) return '';
+  bad.sort(function (x, y) { return (ovKey(x) === 'failed' ? 0 : 1) - (ovKey(y) === 'failed' ? 0 : 1); });
+  var shown = bad.slice(0, 5);
+  return '<div class="ov-card ov-attn"><div class="ov-ct">Needs attention <span class="ov-badge">' + bad.length + '</span></div>'
+    + shown.map(function (r) {
+      return '<div class="at-row">' + ovChip(r, d)
+        + '<div class="at-main"><div class="pt-name">' + ovE(r.taskName) + '</div><div class="pt-sec">' + ovE(r.section) + '</div></div>'
+        + '<div class="whos">' + ovWhoChips(r) + '</div></div>';
+    }).join('')
+    + (bad.length > shown.length ? '<button type="button" class="at-more" data-ovmore="1">See all ' + bad.length + ' in task view &rsaquo;</button>' : '')
     + '</div>';
 }
 
@@ -1228,18 +1313,79 @@ function ovByLine(r, me) {
   if (k === 'open') return '';
   var who = r.staffName || 'Unknown';
   var t = ovWhen(r);
-  var text = (me && who === me) ? 'Submitted' : 'Submitted by ' + window.UI.esc(who);
-  return '<div class="by">' + text + (t ? ' at ' + window.UI.esc(t) : '') + '</div>';
+  var text = (me && who === me) ? 'Submitted' : 'Submitted by ' + ovE(who);
+  return '<div class="by">' + text + (t ? ' at ' + ovE(t) : '') + '</div>';
 }
 function ovRemarks(r) {
-  return r.remarks ? '<div class="rmk">Remarks: ' + window.UI.esc(r.remarks) + '</div>' : '';
+  return r.remarks ? '<div class="rmk">Remarks: ' + ovE(r.remarks) + '</div>' : '';
+}
+
+// ── photos ───────────────────────────────────────────────────
+function ovRefs(r) {
+  return String(r.photoRef || '').split(',').map(function (x) { return x.trim(); })
+    .filter(function (x) { return /^[A-Za-z0-9_-]{10,}$/.test(x); }).slice(0, 5);
+}
+function ovThumbs(r) {
+  var refs = ovRefs(r);
+  if (!refs.length) return '';
+  return '<div class="ph-ths">' + refs.map(function (id) {
+    return '<button type="button" class="ov-th" data-file="' + ovE(id) + '" aria-label="Open photo"></button>';
+  }).join('') + '</div>';
+}
+
+var ovQ = [], ovBusy = 0, ovIO = null;
+function ovSetImg(box, url) {
+  box.classList.remove('ld', 'err');
+  box.innerHTML = '<img alt="Task photo"/>';
+  box.querySelector('img').src = url;
+}
+function ovFetchOne(box) {
+  var id = box.getAttribute('data-file');
+  if (ov.img[id]) { ovSetImg(box, ov.img[id]); return Promise.resolve(); }
+  box.classList.add('ld');
+  return window.MPS_API.photoUrl(id).then(function (url) {
+    ov.img[id] = url;
+    if (box.isConnected) ovSetImg(box, url);
+  }).catch(function () {
+    box.classList.remove('ld');
+    box.classList.add('err');
+    box.textContent = 'Retry';
+  }).then(function () { box._q = 0; });
+}
+function ovPump() {
+  while (ovBusy < 3 && ovQ.length) {
+    var box = ovQ.shift();
+    if (!box.isConnected) { box._q = 0; continue; }
+    ovBusy++;
+    ovFetchOne(box).then(function () { ovBusy--; ovPump(); });
+  }
+}
+function ovEnqueue(box) {
+  if (box._q || box.querySelector('img')) return;
+  box._q = 1; ovQ.push(box); ovPump();
+}
+function ovHydrate() {
+  var boxes = ovEl('ovBody').querySelectorAll('.ov-th');
+  if (!boxes.length) return;
+  if (!ovIO && 'IntersectionObserver' in window) {
+    ovIO = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting) { ovIO.unobserve(e.target); ovEnqueue(e.target); }
+      });
+    }, { rootMargin: '240px' });
+  }
+  Array.prototype.forEach.call(boxes, function (box) {
+    var id = box.getAttribute('data-file');
+    if (ov.img[id]) { ovSetImg(box, ov.img[id]); return; }
+    if (ovIO) ovIO.observe(box); else ovEnqueue(box);
+  });
 }
 
 function ovPersonRow(r, d, me) {
   return '<li class="pt-row">' + ovChip(r, d)
-    + '<div class="pt-main"><div class="pt-name">' + window.UI.esc(r.taskName) + '</div>'
-    + '<div class="pt-sec">' + window.UI.esc(r.section) + '</div>'
-    + ovByLine(r, me) + ovRemarks(r) + '</div></li>';
+    + '<div class="pt-main"><div class="pt-name">' + ovE(r.taskName) + '</div>'
+    + '<div class="pt-sec">' + ovE(r.section) + '</div>'
+    + ovByLine(r, me) + ovRemarks(r) + ovThumbs(r) + '</div></li>';
 }
 
 function ovPersonView(d, rows) {
@@ -1271,28 +1417,29 @@ function ovPersonView(d, rows) {
     html += '<div class="pc warn"><div class="pc-top"><div class="pc-name">No active staff assigned</div>'
       + '<div class="pc-sub">These tasks are assigned to a role or name with nobody active in it.</div></div>'
       + '<ul class="pt">' + orphans.map(function (r) {
-        return '<li class="pt-row">' + ovChip(r, d) + '<div class="pt-main"><div class="pt-name">' + window.UI.esc(r.taskName)
-          + '</div><div class="pt-sec">Assigned to: ' + window.UI.esc(r.assignedTo) + '</div>' + ovByLine(r, '') + '</div></li>';
+        return '<li class="pt-row">' + ovChip(r, d) + '<div class="pt-main"><div class="pt-name">' + ovE(r.taskName)
+          + '</div><div class="pt-sec">Assigned to: ' + ovE(r.assignedTo) + '</div>' + ovByLine(r, '') + '</div></li>';
       }).join('') + '</ul></div>';
   }
   if (!cards.length && !orphans.length) {
     return '<div class="empty">' + (allUsers.length ? 'Nobody matches this filter.' : 'The staff list could not be loaded.') + '</div>';
   }
+  var lbl = ovOpenLabel(d), missed = lbl === 'Missed';
   html += '<div class="pgrid">' + cards.map(function (k) {
     var total = k.mine.length, c = k.c, answered = c.done + c.failed;
-    var defOpen = c.open > 0 || c.failed > 0;
+    var defOpen = !!(q || ov.status);
     var isOpen = ov.open.hasOwnProperty(k.u.name) ? ov.open[k.u.name] : defOpen;
-    var lbl = ovOpenLabel(d);
-    function seg(n, cls) { return n ? '<span class="' + cls + '" style="width:' + (n / total * 100) + '%"></span>' : ''; }
+    var tone = !total ? 'none' : (c.failed ? 'bad' : (c.open ? (missed ? 'miss' : 'wait') : 'ok'));
     var flags = '';
     if (c.failed) flags += '<span class="st st-failed">' + c.failed + ' failed</span>';
-    if (c.open) flags += '<span class="st ' + (lbl === 'Missed' ? 'st-missed' : 'st-open') + '">' + c.open + ' ' + window.UI.esc(lbl.toLowerCase()) + '</span>';
+    if (c.open) flags += '<span class="st ' + (missed ? 'st-missed' : 'st-open') + '">' + c.open + ' ' + ovE(lbl.toLowerCase()) + '</span>';
     if (total && !c.open && !c.failed) flags += '<span class="st st-done">All done</span>';
-    return '<details class="pc" data-pname="' + window.UI.esc(k.u.name) + '"' + (isOpen ? ' open' : '') + '>'
-      + '<summary><span class="u-avatar" aria-hidden="true">' + window.UI.esc(String(k.u.name || '?').slice(0, 1).toUpperCase()) + '</span>'
-      + '<span class="pc-who"><span class="pc-name">' + window.UI.esc(k.u.name) + '</span><span class="pc-sub">' + window.UI.esc(k.role) + '</span></span>'
-      + '<span class="pc-count">' + (total ? '<b>' + answered + '</b> of ' + total + ' submitted' : 'Nothing assigned') + '</span>'
-      + (total ? '<span class="meter' + (lbl === 'Missed' ? ' past' : '') + '">' + seg(c.done, 'm-d') + seg(c.failed, 'm-f') + '</span>' : '')
+    var pct = total ? Math.round(answered / total * 100) : 0;
+    return '<details class="pc t-' + tone + '" data-pname="' + ovE(k.u.name) + '"' + (isOpen ? ' open' : '') + '>'
+      + '<summary><span class="u-avatar ' + ovAvClass(k.u.name) + '" aria-hidden="true">' + ovE(String(k.u.name || '?').slice(0, 1).toUpperCase()) + '</span>'
+      + '<span class="pc-who"><span class="pc-name">' + ovE(k.u.name) + '</span><span class="pc-sub">' + ovE(k.role) + '</span>'
+      + '<span class="pc-count">' + (total ? '<b>' + answered + '</b> of ' + total + ' submitted' : 'Nothing assigned') + '</span></span>'
+      + '<span class="pc-ring">' + ovRing([[c.done, 'rg-d'], [c.failed, 'rg-f']], total, 52, 6, total ? '<b>' + pct + '%</b>' : '<b>\u2013</b>') + '</span>'
       + (flags ? '<span class="pc-flags">' + flags + '</span>' : '')
       + '</summary>'
       + (k.shown.length
@@ -1309,10 +1456,10 @@ function ovWhoChips(r) {
   if (as.everyone && users.length > 4) return '<span class="who">Everyone (' + users.length + ')</span>';
   if (!users.length) {
     return as.everyone ? '<span class="who none">No active staff</span>'
-      : '<span class="who none">No active staff in ' + window.UI.esc(as.labels.join(', ')) + '</span>';
+      : '<span class="who none">No active staff in ' + ovE(as.labels.join(', ')) + '</span>';
   }
   var out = users.slice(0, 6).map(function (u) {
-    return '<span class="who' + (u.name === did ? ' did' : '') + '">' + window.UI.esc(u.name) + '</span>';
+    return '<span class="who' + (u.name === did ? ' did' : '') + '">' + ovE(u.name) + '</span>';
   }).join('');
   if (users.length > 6) out += '<span class="who">+' + (users.length - 6) + ' more</span>';
   return out;
@@ -1321,6 +1468,7 @@ function ovWhoChips(r) {
 function ovTaskView(d) {
   var q = ov.q.toLowerCase();
   var html = '';
+  var lbl = ovOpenLabel(d);
   (d.sections || []).forEach(function (sec) {
     var all = sec.tasks || [];
     all.forEach(function (r) { r._as = ovAssign(r); });
@@ -1330,12 +1478,15 @@ function ovTaskView(d) {
       return ovTaskHit(r, q) || r._as.users.some(function (u) { return String(u.name || '').toLowerCase().indexOf(q) !== -1; });
     });
     if (!list.length) return;
-    var lbl = ovOpenLabel(d);
-    html += '<section class="sc"><div class="sc-head"><span class="sc-name">' + window.UI.esc(sec.section) + '</span>'
-      + '<span class="sc-n">' + (sec.submitted || 0) + ' of ' + (sec.assigned || 0) + ' submitted</span></div>'
+    var c = { done: 0, failed: 0, open: 0 };
+    all.forEach(function (r) { c[ovKey(r)]++; });
+    var t = all.length || 1;
+    html += '<section class="sc"><div class="sc-head"><span class="sc-name">' + ovE(sec.section) + '</span>'
+      + '<span class="sc-n">' + (sec.submitted || 0) + ' of ' + (sec.assigned || 0) + ' submitted</span>'
+      + '<span class="bar sm"><i class="b-d" style="width:' + (c.done / t * 100) + '%"></i><i class="b-f" style="width:' + (c.failed / t * 100) + '%"></i></span></div>'
       + list.map(function (r) {
         return '<div class="tk-row">' + ovChip(r, d)
-          + '<div class="tk-main"><div class="pt-name">' + window.UI.esc(r.taskName) + '</div>' + ovRemarks(r) + '</div>'
+          + '<div class="tk-main"><div class="pt-name">' + ovE(r.taskName) + '</div>' + ovRemarks(r) + ovThumbs(r) + '</div>'
           + '<div class="tk-who"><div class="whos">' + ovWhoChips(r) + '</div>'
           + (ovKey(r) === 'open'
             ? '<div class="by ' + (lbl === 'Missed' ? 'miss' : 'wait') + '">' + (lbl === 'Missed' ? 'Nobody submitted this' : 'Waiting for submission') + '</div>'
@@ -1343,6 +1494,33 @@ function ovTaskView(d) {
       }).join('') + '</section>';
   });
   return html || '<div class="empty">Nothing matches this filter.</div>';
+}
+
+// photo wall: every photo submitted on the day, grouped by section
+function ovPhotoView(d, rows) {
+  var q = ov.q.toLowerCase();
+  var by = {}, order = [], total = 0;
+  rows.forEach(function (r) {
+    var refs = ovRefs(r);
+    if (!refs.length || !ovStatusOk(r)) return;
+    if (q && !(ovTaskHit(r, q) || String(r.staffName || '').toLowerCase().indexOf(q) !== -1)) return;
+    var s = r.section || 'Other';
+    if (!by[s]) { by[s] = []; order.push(s); }
+    by[s].push({ r: r, refs: refs });
+    total += refs.length;
+  });
+  if (!total) return '<div class="empty">No photos were submitted on this day.</div>';
+  return '<div class="ph-count">' + total + ' photo' + (total === 1 ? '' : 's') + ' submitted</div>'
+    + order.map(function (s) {
+      return '<section class="sc"><div class="sc-head"><span class="sc-name">' + ovE(s) + '</span></div><div class="pw">'
+        + by[s].map(function (it) {
+          var t = ovWhen(it.r);
+          return it.refs.map(function (id) {
+            return '<figure class="pw-i"><button type="button" class="ov-th big" data-file="' + ovE(id) + '" aria-label="Open photo"></button>'
+              + '<figcaption><b>' + ovE(it.r.taskName) + '</b><span>' + ovE(it.r.staffName || 'Unknown') + (t ? ' \u00b7 ' + ovE(t) : '') + '</span></figcaption></figure>';
+          }).join('');
+        }).join('') + '</div></section>';
+    }).join('');
 }
 
 ovEl('ovWeek').addEventListener('click', function (e) {
@@ -1356,8 +1534,20 @@ ovEl('ovHero').addEventListener('click', function (e) {
   ov.status = (ov.status === k) ? '' : k;
   ovRender();
 });
+ovEl('ovAttn').addEventListener('click', function (e) {
+  if (!e.target.closest('[data-ovmore]')) return;
+  ov.view = 'task'; ov.status = '';
+  ovRender();
+  ovEl('ovBody').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 ovEl('ovBody').addEventListener('click', function (e) {
-  if (e.target.closest('#ovRetry')) ovLoad(ov.date, true);
+  if (e.target.closest('#ovRetry')) { ovLoad(ov.date, true); return; }
+  var box = e.target.closest('.ov-th');
+  if (!box) return;
+  var img = box.querySelector('img');
+  if (img) { openPhoto(img.src); return; }
+  if (box.classList.contains('err')) { box.classList.remove('err'); box.textContent = ''; }
+  ovEnqueue(box);
 });
 // remember which person cards the admin opened or closed (toggle does not bubble)
 ovEl('ovBody').addEventListener('toggle', function (e) {
