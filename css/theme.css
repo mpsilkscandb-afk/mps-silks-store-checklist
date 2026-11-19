@@ -242,6 +242,18 @@ table.data tr.clickable:hover td { background: var(--gold-pale); }
 #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 #toast.err { background: var(--red); border-color: var(--red); }
 #toast.ok  { background: var(--green); border-color: var(--green); }
+/* optional action button inside a toast (e.g. "Undo"). pointer-events stay
+   off until the toast is shown, so a hidden toast can never swallow taps. */
+#toast .toast-act {
+  pointer-events: none;
+  margin-left: 14px; padding: 4px 10px;
+  border-radius: 6px; border: 1px solid var(--gold-light);
+  background: transparent; color: var(--gold-light);
+  font-size: 12px; font-weight: 700;
+}
+#toast.show .toast-act { pointer-events: auto; }
+#toast .toast-act:hover { text-decoration: underline; }
+#toast .toast-act:focus-visible { outline: 2px solid var(--gold-light); outline-offset: 1px; }
 
 /* ── stat cards ─────────────────────────────────────────────── */
 .stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
