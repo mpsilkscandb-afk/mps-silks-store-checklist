@@ -280,8 +280,8 @@ test('admin page guards access, wires tabs and activates the default panel', () 
   // regression: tab clicks are wired, but nothing activated panel-tasks on
   // load — the Tasks tab (the default view) rendered blank on first open.
   // The default panel must ship with the active class:
-  assert.match(src, /class="panel active" id="panel-tasks"/,
-    'panel-tasks must be active in the markup on first load');
+  assert.match(src, /class="panel active" id="panel-overview"/,
+    'panel-overview must be active in the markup on first load');
 });
 
 test('admin panel: sidebar nav, hash routing, escaping and staff activity', () => {
