@@ -20,12 +20,29 @@
     return t;
   }
 
-  function toast(msg, type) {
+  // toast(msg, type, action?) — action = { label, onClick } appends a small
+  // button to the toast (admin uses it for "Undo"). Plain two-argument calls
+  // behave exactly as before; a toast carrying an action stays up twice as
+  // long so it can be pressed.
+  function toast(msg, type, action) {
     var t = ensureToast();
     t.textContent = msg;
+    if (action && action.label && typeof action.onClick === 'function') {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'toast-act';
+      b.textContent = action.label;
+      b.addEventListener('click', function () {
+        clearTimeout(t._timer);
+        t.className = '';
+        t.textContent = '';
+        action.onClick();
+      });
+      t.appendChild(b);
+    }
     t.className = (type === 'err' ? 'err' : type === 'ok' ? 'ok' : '') + ' show';
     clearTimeout(t._timer);
-    t._timer = setTimeout(function () { t.className = ''; }, 3500);
+    t._timer = setTimeout(function () { t.className = ''; t.textContent = ''; }, action ? 7000 : 3500);
   }
 
   function uuid() {
