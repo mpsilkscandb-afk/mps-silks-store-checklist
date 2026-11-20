@@ -347,6 +347,54 @@
     });
   }
 
+  // ── Hindi / other scripts ─────────────────────────────────
+  // jsPDF's built-in fonts only cover Latin, so Devanagari came out as
+  // garbage. Text that needs another script is drawn by the BROWSER (which
+  // shapes it correctly, using the phone's or PC's own font) onto a canvas
+  // and placed in the PDF as a transparent image. Plain English stays real,
+  // selectable PDF text. Returns null where there is no canvas (Node tests).
+  var PX_MM = 10;
+  function isWide(s) { return /[^\u0000-\u00FF]/.test(String(s || '')); }
+  function textImage(text, widthMm, o) {
+    if (typeof document === 'undefined' || !document.createElement || !(widthMm > 0)) return null;
+    try {
+      o = o || {};
+      var px = (o.pt || 8.5) * 0.3528 * PX_MM;
+      var lhPx = (o.lh || 4.8) * PX_MM;
+      var font = (o.bold ? 'bold ' : '') + px + 'px Helvetica, Arial, "Noto Sans Devanagari", "Nirmala UI", "Devanagari Sangam MN", Mangal, sans-serif';
+      var maxW = Math.ceil(widthMm * PX_MM);
+      var c = document.createElement('canvas');
+      c.width = maxW; c.height = 10;
+      var ctx = c.getContext('2d');
+      if (!ctx) return null;
+      ctx.font = font;
+      var lines = [];
+      String(text).split(/\r?\n/).forEach(function (para) {
+        var words = para.split(/\s+/).filter(Boolean), cur = '';
+        if (!words.length) { lines.push(''); return; }
+        words.forEach(function (w) {
+          var t = cur ? cur + ' ' + w : w;
+          if (!cur || ctx.measureText(t).width <= maxW) cur = t;
+          else { lines.push(cur); cur = w; }
+        });
+        lines.push(cur);
+      });
+      if (o.maxLines && lines.length > o.maxLines) {
+        lines = lines.slice(0, o.maxLines);
+        var last = lines[o.maxLines - 1];
+        while (last.length > 1 && ctx.measureText(last + '\u2026').width > maxW) last = last.slice(0, -1);
+        lines[o.maxLines - 1] = last + '\u2026';
+      }
+      c.height = Math.max(1, Math.ceil(lines.length * lhPx));   // resizing clears the font, so set it again
+      ctx = c.getContext('2d');
+      ctx.font = font;
+      ctx.fillStyle = 'rgb(' + (o.color || [40, 36, 34]).join(',') + ')';
+      ctx.textBaseline = 'middle';
+      lines.forEach(function (ln, i) { ctx.fillText(ln, 0, (i + 0.5) * lhPx); });
+      return { url: c.toDataURL('image/png'), w: c.width / PX_MM, h: c.height / PX_MM };
+    } catch (e) { return null; }
+  }
+
   function renderPdf(jsPdfCtor, data, assets, onProgress) {
     var doc = new jsPdfCtor({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     var W = 210, H = 297, ML = 14, MR = 14, CW = W - ML - MR;
@@ -494,7 +542,10 @@
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(11.5);
         doc.setTextColor.apply(doc, MAROON);
-        doc.text(safeText(sec.name), ML, y + 5);
+        var secT = safeText(sec.name);
+        var secIm = isWide(secT) ? textImage(secT, CW, { pt: 11.5, lh: 6, bold: true, color: MAROON }) : null;
+        if (secIm) addImage(doc, secIm.url, ML, y - 0.5, secIm.w, secIm.h);
+        else doc.text(secT, ML, y + 5);
         y += 7;
         doc.setDrawColor.apply(doc, GOLD);
         doc.setLineWidth(0.6);
@@ -503,10 +554,26 @@
         y += 2.5;
         tableHeader();
         sec.tasks.forEach(function (task) {
-          var nameLines = doc.splitTextToSize(safeText(task.taskName) || '-', COLS[0][1] - 6);
-          var remLines = doc.splitTextToSize(task.remarks || '-', COLS[3][1] - 6);
-          var rowsN = Math.max(nameLines.length, remLines.length, 1);
-          var rowH = rowsN * 4.2 + 3.6;
+          // one cell = real text lines, or (for Hindi etc.) an image of the text
+          function cell(txt, w, colour, bold) {
+            txt = safeText(txt) || '-';
+            if (isWide(txt)) {
+              var im = textImage(txt, w - 6, { color: colour, bold: bold });
+              if (im) return { img: im, h: im.h };
+            }
+            var ls = doc.splitTextToSize(txt, w - 6);
+            return { lines: ls, h: ls.length * 4.2 };
+          }
+          function put(c, x) {
+            if (c.img) addImage(doc, c.img.url, x + 3, y + 2.6, c.img.w, c.img.h);
+            else doc.text(c.lines, x + 3, y + 6);
+          }
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8.5);
+          var cName = cell(task.taskName, COLS[0][1], INK, false);
+          var cResp = cell(task.response, COLS[1][1], INK, false);
+          var cRem = cell(task.remarks, COLS[3][1], task.remarks ? INK : INK60, false);
+          var rowH = Math.max(cName.h, cResp.h, cRem.h, 4.2) + 3.6;
           if (y + rowH > maxY) { doc.addPage(); y = 20; tableHeader(); }
           doc.setFillColor.apply(doc, (sec.tasks.indexOf(task) % 2) ? IVORY : [255, 255, 255]);
           doc.rect(ML, y, CW, rowH, 'F');
@@ -516,14 +583,14 @@
           doc.setTextColor.apply(doc, INK);
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(8.5);
-          doc.text(nameLines, x + 3, y + 6); x += COLS[0][1];
-          doc.text(task.response || '-', x + 3, y + 6); x += COLS[1][1];
+          put(cName, x); x += COLS[0][1];
+          put(cResp, x); x += COLS[1][1];
           doc.setFont('helvetica', 'bold');
           doc.setTextColor.apply(doc, statusColor(task.status));
           doc.text(task.status, x + 3, y + 6); x += COLS[2][1];
           doc.setFont('helvetica', 'normal');
           doc.setTextColor.apply(doc, task.remarks ? INK : INK60);
-          doc.text(remLines, x + 3, y + 6);
+          put(cRem, x);
           y += rowH;
         });
 
@@ -575,7 +642,10 @@
             doc.setTextColor.apply(doc, INK);
             doc.text('Photo taken: ' + (taken ? taken + ' IST' : 'not recorded'), x, y + ih + 4);
             doc.setTextColor.apply(doc, INK60);
-            doc.text('Photo ' + ph.idx + ' of ' + ph.count + ' - ' + safeText(ph.task), x, y + ih + 8);
+            var capT = 'Photo ' + ph.idx + ' of ' + ph.count + ' - ' + safeText(ph.task);
+            var capIm = isWide(capT) ? textImage(capT, TW, { pt: 7.5, lh: 3.6, maxLines: 1, color: INK60 }) : null;
+            if (capIm) addImage(doc, capIm.url, x, y + ih + 5.2, capIm.w, capIm.h);
+            else doc.text(capT, x, y + ih + 8);
             if (colI === 1) y += blockH + 2;
             else if (i === phs.length - 1) y += blockH + 2;   // odd last one
           });
